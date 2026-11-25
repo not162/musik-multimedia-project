@@ -1,0 +1,22 @@
+<?php
+/**
+ * Phase 4: CORS configuration for secure cross-origin API access.
+ */
+
+return [
+    'paths' => ['api/*', 'sanctum/csrf-cookie'],
+
+    'allowed_methods' => ['*'],
+
+    'allowed_origins' => explode(',', env('CORS_ALLOWED_ORIGINS', '*')),
+
+    'allowed_origins_patterns' => [],
+
+    'allowed_headers' => ['*'],
+
+    'exposed_headers' => ['X-Response-Time', 'X-RateLimit-Limit', 'X-RateLimit-Remaining'],
+
+    'max_age' => 86400, // 24 hours
+
+    'supports_credentials' => true,
+];

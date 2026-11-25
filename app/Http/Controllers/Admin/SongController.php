@@ -1,0 +1,96 @@
+<?php
+namespace App\Http\Controllers\Admin;
+
+use App\Events\CatalogUpdatedEvent;
+use App\Http\Controllers\Controller;
+use App\Models\{Album, Artist, AuditLog, Genre, Song};
+use App\Support\SafeBroadcast;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\{Cache, Storage};
+
+class SongController extends Controller
+{
+    public function index(Request $request)
+    {
+        $songs = Song::with(['artist', 'genre'])
+            ->search($request->query('q'))->latest()->paginate(20)->withQueryString();
+        return view('admin.songs.index', compact('songs'));
+    }
+
+    private function formData(Song $song): array
+    {
+        return [
+            'song'    => $song,
+            'artists' => Artist::orderBy('name')->get(),
+            'albums'  => Album::with('artist')->orderBy('title')->get(),
+            'genres'  => Genre::orderBy('name')->get(),
+        ];
+    }
+
+    public function create() { return view('admin.songs.form', $this->formData(new Song)); }
+    public function edit(Song $song) { return view('admin.songs.form', $this->formData($song)); }
+
+    private function data(Request $request, ?Song $song = null): array
+    {
+        $d = $request->validate([
+            'title'     => 'required|string|max:150',
+            'artist_id' => 'required|exists:artists,id',
+            'album_id'  => 'nullable|exists:albums,id',
+            'genre_id'  => 'nullable|exists:genres,id',
+            'duration'  => 'nullable|integer|min:0|max:36000',
+            'lyrics'    => 'nullable|string|max:20000',
+            'audio'     => ($song ? 'nullable' : 'required') . '|file|mimes:mp3,wav,ogg,m4a,aac,flac|max:30720',
+            'cover'     => 'nullable|image|max:2048',
+        ]);
+        unset($d['audio'], $d['cover']);
+        $d['duration'] = (int) ($d['duration'] ?? 0);
+
+        if ($request->hasFile('audio')) {
+            if ($song) Storage::disk('public')->delete($song->file_path);
+            $d['file_path'] = $request->file('audio')->store('songs', 'public');
+        }
+        if ($request->hasFile('cover')) {
+            if ($song?->cover) Storage::disk('public')->delete($song->cover);
+            $d['cover'] = $request->file('cover')->store('covers', 'public');
+        }
+        return $d;
+    }
+
+    public function store(Request $request)
+    {
+        $song = Song::create($this->data($request));
+        AuditLog::record('create', 'Song', $song->id, newValues: $song->only(['title', 'artist_id']));
+        $this->bustAndNotify('created', $song);
+        return redirect()->route('admin.songs.index')->with('ok', 'Lagu berhasil diunggah.');
+    }
+
+    public function update(Request $request, Song $song)
+    {
+        $old = $song->only(['title', 'artist_id', 'album_id', 'genre_id']);
+        $song->update($this->data($request, $song));
+        AuditLog::record('update', 'Song', $song->id, $old, $song->only(['title', 'artist_id', 'album_id', 'genre_id']));
+        $this->bustAndNotify('updated', $song);
+        return redirect()->route('admin.songs.index')->with('ok', 'Lagu diperbarui.');
+    }
+
+    public function destroy(Song $song)
+    {
+        Storage::disk('public')->delete(array_filter([$song->file_path, $song->cover]));
+        AuditLog::record('delete', 'Song', $song->id, $song->only(['title', 'file_path']));
+        $id = $song->id;
+        $title = $song->title;
+        $song->delete();
+        Cache::forget('home:stats');
+        Cache::forget('seo:sitemap:xml');
+        SafeBroadcast::dispatch(new CatalogUpdatedEvent('deleted', 'song', $id, $title));
+        return back()->with('ok', 'Lagu dihapus.');
+    }
+
+    private function bustAndNotify(string $action, Song $song): void
+    {
+        Cache::forget('home:stats');
+        Cache::forget('api:charts');
+        Cache::forget('seo:sitemap:xml');
+        SafeBroadcast::dispatch(new CatalogUpdatedEvent($action, 'song', $song->id, $song->title));
+    }
+}
