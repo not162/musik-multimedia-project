@@ -35,7 +35,7 @@ class PlaylistController extends Controller
     public function show(Playlist $playlist)
     {
         $this->own($playlist);
-        $songs = $playlist->songs()->with(['artist', 'album'])->get();
+        $songs = $playlist->songs()->with(['artist', 'album', 'genre'])->get();
         return view('playlists.show', ['playlist' => $playlist, 'songs' => $songs, 'owner' => true]);
     }
 
@@ -44,7 +44,7 @@ class PlaylistController extends Controller
         $isOwner = auth()->id() === $playlist->user_id;
         abort_unless($playlist->is_public || $isOwner, 404);
         $playlist->load('user');
-        $songs = $playlist->songs()->with(['artist', 'album'])->get();
+        $songs = $playlist->songs()->with(['artist', 'album', 'genre'])->get();
         return view('playlists.show', ['playlist' => $playlist, 'songs' => $songs, 'owner' => false]);
     }
 

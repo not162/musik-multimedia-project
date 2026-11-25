@@ -69,7 +69,7 @@
 <script src="{{ asset('js/player.js') }}?v={{ filemtime(public_path('js/player.js')) }}" defer></script>
 </head>
 <body data-base="{{ url('/') }}"
-      @auth data-auth="1" data-eq="{{ auth()->user()->preferences['eq_preset'] ?? 'normal' }}" @endauth>
+      @auth data-auth="1" data-eq="{{ auth()->user()->preferences['eq_preset'] ?? 'normal' }}" data-prefs='@json(auth()->user()->preferences ?? [])' @endauth>
 <div class="app">
   <aside class="side">
     <a class="brand" href="{{ route('home') }}">
@@ -154,6 +154,7 @@
     <div class="p-meta"><a id="pTitle" href="#">Belum ada lagu</a><small id="pArtist">Pilih lagu untuk diputar</small></div>
     <button id="pFav" class="icon" title="Favorit">♥</button>
     <button id="pOffline" class="icon" title="Simpan Offline (PWA)">📥</button>
+    <button id="pEqMobileBtn" class="icon eq-mob-btn" title="Buka Studio Equalizer">🎛️</button>
   </div>
   <div class="p-center">
     <div class="p-btns">
@@ -166,13 +167,19 @@
     <div class="p-seek"><span id="pCur">0:00</span><input type="range" id="pSeek" min="0" max="1000" value="0"><span id="pDur">0:00</span></div>
   </div>
   <div class="p-right">
-    <select id="pEq" title="Equalizer (Akun Terdaftar)">
+    <select id="pEq" title="Equalizer & Algoritma (Akun Terdaftar)">
       <option value="normal">EQ: Normal @guest 🔒@endguest</option>
       <option value="bass">EQ: Bass Boost</option>
       <option value="vocal">EQ: Vocal</option>
       <option value="lofi">EQ: Lo-Fi</option>
       <option value="rock">EQ: Rock</option>
+      <option value="acoustic">EQ: Akustik</option>
+      <option value="electronic">EQ: Elektronik</option>
+      <option value="auto_genre">⚡ Adaptif Genre</option>
+      <option value="adaptive">🎯 Adaptif Real-Time</option>
+      <option value="custom">🎛️ Kustom</option>
     </select>
+    <button id="pEqStudioBtn" type="button" class="btn ghost sm" title="Atur Algoritma & Kurva EQ 10-Band">🎛️ EQ</button>
     <select id="pSpeed" title="Kecepatan Putar (Akun Terdaftar)">
       <option value="1">1.0x @guest 🔒@endguest</option>
       <option value="0.75">0.75x</option>
@@ -232,6 +239,66 @@
     <li>🍎 <b>iOS Safari:</b> Tekan tombol <b>Share (⬆️) → Add to Home Screen</b>.</li>
   </ul>
   <form method="dialog"><button class="btn sm">Mengerti</button></form>
+</dialog>
+
+<dialog id="eqStudioDialog" class="eq-dialog">
+  <div class="eq-head">
+    <div>
+      <span class="badge ok">🎛️ 10-BAND DSP EQUALIZER</span>
+      <h3 style="margin:4px 0 2px">Studio Equalizer & Algoritma Adaptif</h3>
+      <small id="eqTrackBadge" class="mut">Sesuaikan kurva frekuensi atau biarkan algoritma menyelaraskan suara sesuai arahan Anda.</small>
+    </div>
+    <form method="dialog"><button class="icon" title="Tutup">✕</button></form>
+  </div>
+
+  <canvas id="eqCanvas" class="eq-canvas" width="600" height="130"></canvas>
+
+  <div class="eq-controls-grid">
+    <label>Mode Algoritma
+      <select id="eqMode">
+        <option value="manual">Manual / Preset</option>
+        <option value="auto_genre">⚡ Adaptif Genre Lagu</option>
+        <option value="adaptive">🎯 Adaptif Spektrum Real-Time</option>
+      </select>
+    </label>
+    <label>Arah Karakter Suara
+      <select id="eqDirection">
+        <option value="balanced">Seimbang (Studio Reference)</option>
+        <option value="warm_bass">Hangat &amp; Deep Bass</option>
+        <option value="bright_clear">Jernih &amp; Detail Vokal</option>
+        <option value="punchy">Bertenaga (V-Shape Dinamis)</option>
+        <option value="focus_study">Fokus Belajar (Anti-Lelah)</option>
+      </select>
+    </label>
+    <label>Intensitas Algoritma: <b id="eqIntensityVal">70%</b>
+      <input type="range" id="eqIntensity" min="0" max="100" value="70">
+    </label>
+  </div>
+
+  <div class="eq-macro-grid">
+    <label>Arah Bass Tilt (<span id="eqMacroBassVal">0.0</span> dB)
+      <input type="range" id="eqMacroBass" min="-6" max="6" step="0.5" value="0">
+    </label>
+    <label>Arah Fokus Vokal (<span id="eqMacroVocalVal">0.0</span> dB)
+      <input type="range" id="eqMacroVocal" min="-6" max="6" step="0.5" value="0">
+    </label>
+    <label>Arah Treble Air (<span id="eqMacroTrebleVal">0.0</span> dB)
+      <input type="range" id="eqMacroTreble" min="-6" max="6" step="0.5" value="0">
+    </label>
+  </div>
+
+  <div id="eqSliders" class="eq-sliders"></div>
+
+  <div class="eq-foot">
+    <label class="inline" style="font-size:13px;cursor:pointer">
+      <input type="checkbox" id="eqAutoGain" checked>
+      <span>Auto-Gain Headroom + Compressor (Anti-Clipping)</span>
+    </label>
+    <div class="actions" style="margin:0">
+      <button type="button" id="eqResetBtn" class="btn ghost sm">↺ Reset Datar</button>
+      <button type="button" id="eqSaveBtn" class="btn sm">💾 Simpan Arahan EQ</button>
+    </div>
+  </div>
 </dialog>
 
 <div id="toast"></div>

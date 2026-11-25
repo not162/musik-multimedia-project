@@ -14,7 +14,7 @@ class SongController extends Controller
     {
         $sort = $request->query('sort', 'terbaru');
 
-        $songs = Song::with(['artist', 'album'])
+        $songs = Song::with(['artist', 'album', 'genre'])
             ->search($request->query('q'))
             ->when($request->query('genre'), fn ($q, $g) => $q->where('genre_id', $g))
             ->when($sort === 'populer', fn ($q) => $q->orderByDesc('play_count'), fn ($q) => $q)
@@ -29,7 +29,7 @@ class SongController extends Controller
     {
         $song->load(['artist', 'album', 'genre']);
 
-        $related = Song::with(['artist', 'album'])->where('id', '!=', $song->id)
+        $related = Song::with(['artist', 'album', 'genre'])->where('id', '!=', $song->id)
             ->where(fn ($q) => $q->where('artist_id', $song->artist_id)
                 ->when($song->genre_id, fn ($w) => $w->orWhere('genre_id', $song->genre_id)))
             ->inRandomOrder()->limit(8)->get();

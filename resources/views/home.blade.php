@@ -25,7 +25,7 @@
           <button class="btn js-play-all" data-scope="#trend">▶ Putar Sekarang</button>
           <a class="btn ghost" href="{{ route('register') }}" data-turbo="false">🔓 Daftar Gratis</a>
           <button type="button" class="btn ghost js-pwa-install">📲 Pasang Aplikasi</button>
-          <a class="btn ghost" href="#pengenalan-produk">Pelajari Produk ↓</a>
+          <a class="btn ghost" href="#cara-kerja">Cara Kerja ↓</a>
         </div>
       @endauth
     </div>
@@ -39,46 +39,7 @@
 </div>
 
 @guest
-{{-- Pengenalan Produk & Proyek (ramah untuk pengguna umum maupun mitra/pemangku kepentingan tanpa istilah targeting) --}}
-<section id="pengenalan-produk">
-  <div class="section-head">
-    <h2>🌟 Mengenal Produk Musikku</h2>
-    <p class="mut" style="margin:0">Dirancang dengan antarmuka terang yang bersih dan arsitektur modular agar nyaman dinikmati pendengar harian sekaligus siap diintegrasikan untuk kebutuhan pengelolaan musik modern.</p>
-  </div>
-
-  <div class="feature-grid">
-    <div class="feature-card">
-      <div class="feature-icon">🎧</div>
-      <h3>Pemutar Persisten & Audio Pro</h3>
-      <p>Navigasi lintas halaman tanpa memutus lagu yang sedang diputar, lengkap dengan seeking presisi, lirik lagu, antrean dinamis, serta Equalizer 5-Band & kontrol kecepatan putar.</p>
-    </div>
-    <div class="feature-card">
-      <div class="feature-icon">📲</div>
-      <h3>Aplikasi PWA & Putar Offline</h3>
-      <p>Dapat dipasang langsung ke layar utama desktop, Android, maupun iOS. Lagu yang disimpan tetap dapat diputar meski perangkat sedang tidak terhubung ke internet.</p>
-    </div>
-    <div class="feature-card">
-      <div class="feature-icon">⚡</div>
-      <h3>Aktivitas Langsung Real-Time</h3>
-      <p>Didukung Laravel Reverb dan Pusher untuk memperbarui statistik pemutaran, daftar pendengar aktif, serta notifikasi perubahan katalog secara seketika.</p>
-    </div>
-    <div class="feature-card">
-      <div class="feature-icon">🔌</div>
-      <h3>RESTful API & Token Terstruktur</h3>
-      <p>Menyediakan endpoint versi <code class="inline">/api/v1</code> berbasis MySQL dengan autentikasi token personal dan pemisahan hak akses peran pengguna serta administrator.</p>
-    </div>
-    <div class="feature-card">
-      <div class="feature-icon">🛡️</div>
-      <h3>Keamanan & Pencatatan Lokal</h3>
-      <p>Dilengkapi enkripsi kata sandi hashing & salting, proteksi brute-force, pembatasan laju permintaan, header keamanan modern, dan pencatatan aktivitas LRS bersegel HMAC.</p>
-    </div>
-    <div class="feature-card">
-      <div class="feature-icon">🚀</div>
-      <h3>Siap Skala, Cache & SEO</h3>
-      <p>Menggunakan ETag HTTP caching, metadata OpenGraph & JSON-LD, sitemap XML otomatis, pemantauan kesehatan sistem, pencadangan basis data, serta pelacakan error.</p>
-    </div>
-  </div>
-
+<section id="cara-kerja">
   <div class="section-head">
     <h2>🧭 Cara Kerja Platform</h2>
     <p class="mut" style="margin:0">Mulai dalam hitungan detik dari browser atau pasang langsung sebagai aplikasi mandiri.</p>

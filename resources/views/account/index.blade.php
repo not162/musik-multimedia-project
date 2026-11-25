@@ -21,6 +21,15 @@
       <span class="chip sm">✅ {{ str_replace('_', ' ', $feat) }}</span>
     @endforeach
   </div>
+  <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+    <div>
+      <b>🎛️ Profil Equalizer Aktif:</b>
+      <span class="badge info">{{ strtoupper($user->preferences['eq_mode'] ?? 'manual') }}</span>
+      <span class="badge">{{ $user->preferences['eq_direction'] ?? 'balanced' }}</span>
+      <span class="badge ok">{{ $user->preferences['eq_preset'] ?? 'normal' }}</span>
+    </div>
+    <button type="button" class="btn ghost sm" onclick="document.getElementById('pEqStudioBtn')?.click()">Buka Studio EQ 10-Band</button>
+  </div>
 </div>
 
 <div class="two">

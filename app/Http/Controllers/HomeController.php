@@ -10,7 +10,7 @@ class HomeController extends Controller
 {
     public function index()
     {
-        $with = ['artist', 'album'];
+        $with = ['artist', 'album', 'genre'];
 
         $recommended = collect();
         $userStats   = null;

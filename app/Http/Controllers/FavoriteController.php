@@ -10,7 +10,7 @@ class FavoriteController extends Controller
 {
     public function index()
     {
-        $songs = auth()->user()->favoriteSongs()->with(['artist', 'album'])->orderByPivot('created_at', 'desc')->get();
+        $songs = auth()->user()->favoriteSongs()->with(['artist', 'album', 'genre'])->orderByPivot('created_at', 'desc')->get();
         return view('library.favorites', compact('songs'));
     }
 

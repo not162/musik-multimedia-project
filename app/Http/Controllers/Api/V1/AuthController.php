@@ -157,8 +157,18 @@ class AuthController extends Controller
     public function updatePreferences(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'eq_preset' => 'sometimes|string|in:normal,bass,vocal,lofi,rock',
-            'speed'     => 'sometimes|numeric|min:0.5|max:2.0',
+            'eq_preset'            => 'sometimes|string|in:normal,bass,vocal,lofi,rock,acoustic,electronic,custom,auto_genre,adaptive',
+            'eq_mode'              => 'sometimes|string|in:manual,auto_genre,adaptive',
+            'eq_direction'         => 'sometimes|string|in:balanced,warm_bass,bright_clear,punchy,focus_study',
+            'eq_intensity'         => 'sometimes|integer|min:0|max:100',
+            'eq_auto_gain'         => 'sometimes|boolean',
+            'eq_macro'             => 'sometimes|array',
+            'eq_macro.bass_tilt'   => 'sometimes|numeric|min:-6|max:6',
+            'eq_macro.vocal_focus' => 'sometimes|numeric|min:-6|max:6',
+            'eq_macro.treble_air'  => 'sometimes|numeric|min:-6|max:6',
+            'eq_bands'             => 'sometimes|array|size:10',
+            'eq_bands.*'           => 'numeric|min:-12|max:12',
+            'speed'                => 'sometimes|numeric|min:0.5|max:2.0',
         ]);
 
         $user  = $request->user();

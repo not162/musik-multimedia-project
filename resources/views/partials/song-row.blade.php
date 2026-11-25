@@ -1,7 +1,7 @@
 {{-- Variabel: $song, opsional $n (nomor), $removeUrl (tombol hapus dari playlist) --}}
 @php $isFav = auth()->check() && in_array($song->id, auth()->user()->favoriteIds()); @endphp
 <div class="song-row" data-id="{{ $song->id }}" data-src="{{ route('songs.stream', $song) }}"
-     data-title="{{ $song->title }}" data-artist="{{ $song->artist->name }}" data-href="{{ route('songs.show', $song) }}"
+     data-title="{{ $song->title }}" data-artist="{{ $song->artist->name }}" data-genre="{{ $song->genre?->name ?? '' }}" data-href="{{ route('songs.show', $song) }}"
      data-cover="{{ $song->art_url }}" data-grad="{{ $song->gradient }}" data-fav="{{ $isFav ? 1 : 0 }}">
   @isset($n)<span class="num">{{ $n }}</span>@endisset
   @include('partials.cover', ['m' => $song])
