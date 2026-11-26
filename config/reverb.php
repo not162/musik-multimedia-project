@@ -8,8 +8,8 @@ return [
 
     'servers' => [
         'reverb' => [
-            'host'     => env('REVERB_SERVER_HOST', '0.0.0.0'),
-            'port'     => (int) env('REVERB_SERVER_PORT', 8080),
+            'host'     => env('REVERB_SERVER_HOST', '127.0.0.1'),
+            'port'     => (int) env('REVERB_SERVER_PORT', 8090),
             'path'     => env('REVERB_SERVER_PATH', ''),
             'hostname' => env('REVERB_HOST', '127.0.0.1'),
             'options'  => [
@@ -42,7 +42,7 @@ return [
                 'app_id'          => env('REVERB_APP_ID', 'musikku-app'),
                 'options'         => [
                     'host'   => env('REVERB_HOST', '127.0.0.1'),
-                    'port'   => (int) env('REVERB_PORT', 8080),
+                    'port'   => (int) env('REVERB_PORT', 8090),
                     'scheme' => env('REVERB_SCHEME', 'http'),
                     'useTLS' => env('REVERB_SCHEME', 'http') === 'https',
                 ],
