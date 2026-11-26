@@ -15,7 +15,9 @@ class MusikkuEnterpriseTest extends TestCase
             ->assertSee('Akses Publik')
             ->assertSee('Fitur Akun Terdaftar')
             ->assertSee('Daftar Label Musik Baru')
+            ->assertSee('Dengarkan Musik Lebih Nyaman')
             ->assertSee('manifest.webmanifest')
+            ->assertDontSee('Personal API Token')
             ->assertDontSee('Mengenal Produk Musikku');
 
         $this->get('/label')->assertStatus(200)->assertSee('Daftar Label Musik');
@@ -55,7 +57,13 @@ class MusikkuEnterpriseTest extends TestCase
             ->assertSee('Personal API Token')
             ->assertSee('HASH:');
 
-        $this->actingAs($admin)->get('/admin/ai-studio')->assertStatus(200)->assertSee('Konfigurasi API AI Key');
+        $this->actingAs($admin)->get('/admin/ai-studio')
+            ->assertStatus(200)
+            ->assertSee('Konfigurasi API AI Key')
+            ->assertSee('Labelling')
+            ->assertSee('Train')
+            ->assertSee('Validation')
+            ->assertSee('Latih Suara Halus & Jernih');
         $this->actingAs($admin)->get('/admin/labels')->assertStatus(200)->assertSee('Daftar Label Musik');
     }
 
@@ -141,6 +149,40 @@ class MusikkuEnterpriseTest extends TestCase
         $this->withToken($token)->getJson('/api/v1/admin/error-logs')->assertStatus(200);
         $this->withToken($token)->getJson('/api/v1/admin/lrs-statements')->assertStatus(200);
         $this->withToken($token)->getJson('/api/v1/admin/health')->assertStatus(200);
+
+        // 5. Verify AI Training Pipeline: Labelling -> Train -> Validation -> Latih Suara Halus & Jernih
+        $this->withToken($token)->postJson('/api/v1/admin/ai/labelling/auto')
+            ->assertStatus(200)
+            ->assertJsonStructure(['message', 'count']);
+
+        $this->withToken($token)->postJson("/api/v1/admin/ai/songs/{$song->id}/label", [
+            'preset_key'        => 'halus_jernih',
+            'dataset_split'     => 'train',
+            'target_clarity'    => 95,
+            'target_smoothness' => 96,
+        ])->assertStatus(200)->assertJsonPath('sample.label_name', 'Halus & Jernih');
+
+        $this->withToken($token)->postJson('/api/v1/admin/ai/train', [
+            'epochs'     => 60,
+            'model_name' => 'Model Uji Penjernih Suara',
+        ])->assertStatus(200)->assertJsonPath('run.status', 'trained');
+
+        $this->withToken($token)->postJson('/api/v1/admin/ai/validate')
+            ->assertStatus(200)
+            ->assertJsonPath('run.status', 'validated')
+            ->assertJsonStructure(['run' => ['val_accuracy', 'val_loss', 'clarity_gain_pct']]);
+
+        $this->withToken($token)->postJson("/api/v1/admin/ai/songs/{$song->id}/polish", [
+            'preset_key'     => 'halus_jernih',
+            'noise_strength' => 'medium',
+            'render_audio'   => true,
+        ])->assertStatus(200)
+            ->assertJsonPath('song.is_voice_smoothed', true)
+            ->assertJsonPath('song.voice_preset', 'halus_jernih');
+
+        $this->getJson("/api/v1/songs/{$song->id}/ai-profile")
+            ->assertStatus(200)
+            ->assertJsonPath('is_voice_smoothed', true);
 
         $admin->tokens()->where('name', 'test-admin')->delete();
     }

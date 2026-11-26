@@ -1,21 +1,21 @@
 @extends('layouts.musikku')
-@section('title', 'Mode Offline')
+@section('title', 'Sedang Tanpa Internet')
 @section('content')
 <div class="hero">
-  <span class="badge warn">○ OFFLINE MODE · PWA</span>
-  <h1>Anda sedang offline</h1>
-  <p class="mut" style="margin:0">Koneksi internet tidak terdeteksi. Lagu yang sudah Anda simpan ke penyimpanan offline PWA tetap dapat diputar di bawah ini.</p>
+  <span class="badge warn">○ TIDAK ADA INTERNET</span>
+  <h1>Anda sedang tidak terhubung ke internet</h1>
+  <p class="mut" style="margin:0">Koneksi internet belum tersambung. Lagu yang pernah Anda simpan ke perangkat tetap dapat diputar di bawah ini.</p>
 </div>
 
 <div class="panel">
-  <h3>📥 Lagu Tersimpan Offline</h3>
+  <h3>📥 Lagu Tersimpan di Perangkat Anda</h3>
   <div id="offlineSongList" class="song-list" style="margin-top:10px">
-    <p class="mut">Memuat daftar lagu offline…</p>
+    <p class="mut">Memuat daftar lagu tersimpan…</p>
   </div>
 </div>
 
 <div class="actions">
-  <button type="button" class="btn" onclick="location.reload()">↻ Coba Hubungkan Lagi</button>
+  <button type="button" class="btn" onclick="location.reload()">↻ Coba Sambungkan Lagi</button>
   <a class="btn ghost" href="{{ route('home') }}">← Kembali ke Beranda</a>
 </div>
 
@@ -27,7 +27,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const cached = new Set(await window.musikkuOffline.listUrls());
   const available = items.filter(i => cached.has(i.src));
   if (!available.length) {
-    box.innerHTML = '<p class="mut">Belum ada lagu yang disimpan offline. Saat online, tekan tombol 📥 pada lagu mana pun (khusus akun terdaftar).</p>';
+    box.innerHTML = '<p class="mut">Belum ada lagu yang disimpan. Saat ada internet, tekan tombol 📥 pada lagu mana saja untuk menyimpannya.</p>';
     return;
   }
   box.innerHTML = '';

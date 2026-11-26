@@ -100,9 +100,16 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
             Route::apiResource('genres', V1\Admin\GenreController::class);
             Route::apiResource('labels', V1\Admin\LabelController::class);
 
-            // AI Music Fine-Tuning & API Management
+            // AI Music Fine-Tuning, Alat Bantu Latih & API Management
             Route::get('ai/status', [V1\Admin\AiStudioController::class, 'status'])->name('ai.status');
             Route::post('ai/provider', [V1\Admin\AiStudioController::class, 'saveProvider'])->name('ai.provider');
+            Route::post('ai/labelling/auto', [V1\Admin\AiStudioController::class, 'autoLabel'])->name('ai.autoLabel');
+            Route::post('ai/songs/{song}/label', [V1\Admin\AiStudioController::class, 'labelSong'])->name('ai.label');
+            Route::post('ai/train', [V1\Admin\AiStudioController::class, 'trainModel'])->name('ai.train');
+            Route::post('ai/validate', [V1\Admin\AiStudioController::class, 'validateModel'])->name('ai.validate');
+            Route::post('ai/songs/{song}/polish', [V1\Admin\AiStudioController::class, 'polishSong'])
+                ->middleware('api.rule:admin.ai')
+                ->name('ai.polish');
             Route::post('ai/songs/{song}/finetune', [V1\Admin\AiStudioController::class, 'finetuneSong'])
                 ->middleware('api.rule:admin.ai')
                 ->name('ai.finetune');

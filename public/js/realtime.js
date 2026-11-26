@@ -7,7 +7,7 @@
   const $ = (s) => document.querySelector(s);
 
   let rtConnected = false;
-  let rtDriverLabel = 'Realtime siap';
+  let rtDriverLabel = '⚡ Siap';
 
   function setStatus(text, ok) {
     rtDriverLabel = text;
@@ -84,9 +84,9 @@
 
       const conn = echo.connector?.pusher?.connection;
       if (conn) {
-        conn.bind('connected', () => setStatus(`⚡ Live (${cfg.driver})`, true));
-        conn.bind('unavailable', () => setStatus('WS Standby', false));
-        conn.bind('error', () => setStatus('WS Standby', false));
+        conn.bind('connected', () => setStatus('⚡ Terhubung Langsung', true));
+        conn.bind('unavailable', () => setStatus('⚡ Siap', false));
+        conn.bind('error', () => setStatus('⚡ Siap', false));
       }
 
       // 1. Public Channel: Live song plays, AI fine-tuning & catalog/label updates
@@ -95,22 +95,26 @@
           appendLiveFeed(e);
         })
         .listen('.song.finetuned', (e) => {
-          window.musikkuToast?.(`✨ AI Fine-Tuning diperbarui: ${e.title}${e.mood ? ' (' + e.mood + ')' : ''}`);
+          const suffix = e.is_voice_smoothed ? ' (Halus & Jernih)' : (e.mood ? ' (' + e.mood + ')' : '');
+          window.musikkuToast?.(`✨ Suara lagu dirapikan AI: ${e.title}${suffix}`);
           document.querySelectorAll(`.song-row[data-id="${e.song_id}"]`).forEach((row) => {
             if (e.eq_bands) row.dataset.aiEq = JSON.stringify(e.eq_bands);
             row.dataset.aiMood = e.mood || '';
             row.dataset.aiPreamp = String(e.preamp_db ?? 0);
             row.dataset.aiPitch = String(e.pitch_rate ?? 1);
+            row.dataset.voiceSmoothed = e.is_voice_smoothed ? '1' : '0';
             if (e.label) row.dataset.label = e.label;
             const slot = row.querySelector('.js-ai-badge');
             if (slot) {
-              slot.innerHTML = `<span class="badge ok">✨ AI${e.mood ? ' · ' + e.mood : ''}</span>`;
+              slot.innerHTML = e.is_voice_smoothed
+                ? '<span class="badge ok">✨ Suara Halus &amp; Jernih</span>'
+                : `<span class="badge ok">✨ Suara AI${e.mood ? ' · ' + e.mood : ''}</span>`;
             }
           });
           window.dispatchEvent(new CustomEvent('musikku:song-finetuned', { detail: e }));
         })
         .listen('.catalog.updated', (e) => {
-          const prefix = e.type === 'label' ? '🏷️ Label Musik Baru' : 'Katalog diperbarui';
+          const prefix = e.type === 'label' ? '🏷️ Label Musik Baru' : 'Daftar lagu diperbarui';
           window.musikkuToast?.(`${prefix}: ${e.title}`);
         });
 

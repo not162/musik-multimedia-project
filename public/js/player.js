@@ -33,7 +33,19 @@
    * 10-Band Parametric/Graphic DSP Equalizer + Direction-Guided Algorithm
    * ===================================================================== */
   const EQ_FREQS  = [32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
-  const EQ_LABELS = ['32', '64', '125', '250', '500', '1k', '2k', '4k', '8k', '16k'];
+  const EQ_LABELS = ['Bass Dalam', 'Bass', 'Hangat', 'Vokal 1', 'Vokal 2', 'Jelas', 'Detail', 'Lembut', 'Desir', 'Udara'];
+  const MODE_LABELS = {
+    manual: 'Atur Sendiri',
+    auto_genre: 'Otomatis Sesuai Lagu',
+    adaptive: 'Haluskan Otomatis',
+  };
+  const DIR_LABELS = {
+    balanced: 'Seimbang & Alami',
+    warm_bass: 'Bass Hangat & Empuk',
+    bright_clear: 'Vokal Halus & Jernih',
+    punchy: 'Bertenaga & Menghentak',
+    focus_study: 'Nyaman untuk Fokus',
+  };
 
   const EQ_PRESETS = {
     normal:     [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -121,11 +133,11 @@
       });
 
       compressor = audioCtx.createDynamicsCompressor();
-      compressor.threshold.value = -6;
-      compressor.knee.value = 12;
-      compressor.ratio.value = 4;
-      compressor.attack.value = 0.003;
-      compressor.release.value = 0.2;
+      compressor.threshold.value = -14;
+      compressor.knee.value = 16;
+      compressor.ratio.value = 2.6;
+      compressor.attack.value = 0.01;
+      compressor.release.value = 0.18;
 
       analyser = audioCtx.createAnalyser();
       analyser.fftSize = 1024;
@@ -159,13 +171,16 @@
     }
 
     if (eqState.eq_mode === 'auto_genre') {
-      const aiEq = cur()?.aiEq;
+      const song = cur();
+      const aiEq = song?.aiEq;
       if (Array.isArray(aiEq) && aiEq.length === 10) {
+        // Jika file audio fisik sudah dihaluskan AI, beri sentuhan ringan agar suara tidak berlebihan
+        const aiScale = song?.isVoiceSmoothed ? (0.35 * intensity) : intensity;
         return EQ_FREQS.map((_, i) =>
-          clamp(Number(aiEq[i] || 0) * intensity + dirCurve[i] * (0.3 * intensity) + macroVec[i], -12, 12)
+          clamp(Number(aiEq[i] || 0) * aiScale + dirCurve[i] * (0.3 * intensity) + macroVec[i], -12, 12)
         );
       }
-      const gKey = (cur()?.genre || '').toLowerCase().trim();
+      const gKey = (song?.genre || '').toLowerCase().trim();
       const gCurve = GENRE_CURVES[gKey] || EQ_DIRECTIONS.balanced;
       return EQ_FREQS.map((_, i) =>
         clamp(gCurve[i] * intensity + dirCurve[i] * (0.45 * intensity) + macroVec[i], -12, 12)
@@ -253,7 +268,7 @@
           eq_bands: computedBands.map(v => Math.round(v * 10) / 10),
         }),
       }).then(r => {
-        if (r.ok && showToast) musikkuToast('Arahan & kurva EQ disimpan ke profil Anda');
+        if (r.ok && showToast) musikkuToast('Pengaturan suara halus disimpan ke akun Anda');
       }).catch(() => {});
     }, showToast ? 10 : 380);
   }
@@ -337,10 +352,12 @@
 
     if (eqDom.trackBadge) {
       const c = cur();
-      const g = c?.genre ? ` · Genre: ${c.genre}` : '';
+      const g = c?.genre ? ` · ${c.genre}` : '';
+      const modeName = MODE_LABELS[eqState.eq_mode] || eqState.eq_mode;
+      const dirName = DIR_LABELS[eqState.eq_direction] || eqState.eq_direction;
       eqDom.trackBadge.textContent = c
-        ? `Aktif: ${c.title}${g} · Mode: ${eqState.eq_mode} · Arah: ${eqState.eq_direction}`
-        : 'Sesuaikan kurva frekuensi atau biarkan algoritma menyelaraskan suara sesuai arahan Anda.';
+        ? `Sedang diputar: ${c.title}${g} · ${modeName} · ${dirName}`
+        : 'Pilih gaya suara favorit Anda atau biarkan sistem menghaluskan suara secara otomatis.';
     }
   }
 
@@ -425,6 +442,7 @@
       id: +r.dataset.id, src: r.dataset.src, title: r.dataset.title, artist: r.dataset.artist,
       genre: r.dataset.genre || '', label: r.dataset.label || '',
       aiEq, aiMood: r.dataset.aiMood || '', aiPitch: Number(r.dataset.aiPitch || 1),
+      isVoiceSmoothed: r.dataset.voiceSmoothed === '1',
       href: r.dataset.href, cover: r.dataset.cover, grad: r.dataset.grad, fav: r.dataset.fav === '1',
     };
   };
@@ -606,6 +624,7 @@
         it.aiEq = d.eq_bands || it.aiEq;
         it.aiMood = d.mood || it.aiMood;
         it.aiPitch = Number(d.pitch_rate || 1);
+        it.isVoiceSmoothed = !!d.is_voice_smoothed;
       }
     });
     if (cur()?.id === +d.song_id && isAuth()) {
@@ -652,7 +671,7 @@
       syncEqControlsFromState();
       applyEqToAudio(true);
       persistEqPreferences(false);
-      musikkuToast(`Equalizer: ${el.eq.options[el.eq.selectedIndex].text}`);
+      musikkuToast(`Pengaturan suara: ${el.eq.options[el.eq.selectedIndex].text}`);
     });
   }
 
@@ -740,13 +759,13 @@
       if (!isAuth()) { el.timer.value = '0'; $('#proLockDialog')?.showModal(); return; }
       clearTimeout(st.sleepTimer);
       const mins = Number(el.timer.value);
-      if (mins <= 0) { musikkuToast('Sleep timer dimatikan'); return; }
+      if (mins <= 0) { musikkuToast('Penghenti otomatis dimatikan'); return; }
       st.sleepTimer = setTimeout(() => {
         audio.pause();
         el.timer.value = '0';
-        musikkuToast('Sleep timer selesai — pemutaran dijeda');
+        musikkuToast('Waktu habis — musik dihentikan otomatis');
       }, mins * 60 * 1000);
-      musikkuToast(`Sleep timer aktif: ${mins} menit`);
+      musikkuToast(`Musik akan berhenti otomatis dalam ${mins} menit`);
     });
   }
 

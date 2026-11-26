@@ -62,11 +62,11 @@
     const badge = $('#netStatus');
     if (!badge) return;
     const online = navigator.onLine;
-    badge.textContent = online ? '● Online' : '○ Offline';
+    badge.textContent = online ? '● Tersambung' : '○ Tanpa Internet';
     badge.className = 'net-pill ' + (online ? 'is-online' : 'is-offline');
   }
-  window.addEventListener('online', () => { syncNetworkStatus(); window.musikkuToast?.('Koneksi kembali online'); });
-  window.addEventListener('offline', () => { syncNetworkStatus(); window.musikkuToast?.('Mode offline aktif — lagu tersimpan tetap bisa diputar'); });
+  window.addEventListener('online', () => { syncNetworkStatus(); window.musikkuToast?.('Internet kembali tersambung'); });
+  window.addEventListener('offline', () => { syncNetworkStatus(); window.musikkuToast?.('Tidak ada internet — lagu simpanan tetap bisa diputar'); });
   document.addEventListener('turbo:load', syncNetworkStatus);
   syncNetworkStatus();
 
@@ -90,7 +90,7 @@
         return;
       }
       if (!('caches' in window)) {
-        window.musikkuToast?.('Browser tidak mendukung Cache Storage offline.');
+        window.musikkuToast?.('Browser ini belum mendukung penyimpanan lagu tanpa internet.');
         return;
       }
       const key = song.src.split('?')[0];

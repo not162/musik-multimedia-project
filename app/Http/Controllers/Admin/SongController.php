@@ -59,19 +59,19 @@ class SongController extends Controller
         return $d;
     }
 
-    public function store(Request $request, AiMusicService $ai)
+    public function store(Request $request, AiMusicService $ai, \App\Services\AudioTrainingService $trainer)
     {
         $song = Song::create($this->data($request));
         AuditLog::record('create', 'Song', $song->id, newValues: $song->only(['title', 'artist_id', 'record_label_id']));
 
-        // Otomatis fine-tune real-time jika diaktifkan pada AI Studio
+        // Otomatis rapikan & haluskan suara saat lagu baru diunggah jika fitur aktif
         if ($ai::currentSetting()->auto_finetune_realtime) {
-            $res = $ai->finetuneSong($song);
+            $res = $trainer->polishSongVoice($song, 'halus_jernih', 'medium', '', true, auth()->id());
             SafeBroadcast::dispatch(new SongFinetunedEvent($res['song'], $res['source']));
         }
 
         $this->bustAndNotify('created', $song);
-        return redirect()->route('admin.songs.index')->with('ok', 'Lagu berhasil diunggah & disinkronkan real-time.');
+        return redirect()->route('admin.songs.index')->with('ok', 'Lagu berhasil diunggah, dirapikan suaranya, & langsung tampil ke pendengar.');
     }
 
     public function update(Request $request, Song $song)

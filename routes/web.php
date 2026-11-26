@@ -87,10 +87,16 @@ Route::middleware(['auth', EnsureAdmin::class])->prefix('admin')->name('admin.')
     Route::post('genres', [Admin\GenreController::class, 'store'])->name('genres.store');
     Route::delete('genres/{genre}', [Admin\GenreController::class, 'destroy'])->name('genres.destroy');
 
-    // AI Audio Fine-Tuning & API Management Studio (Admin Only)
+    // AI Audio Fine-Tuning, Alat Bantu Latih & API Management Studio (Admin Only)
     Route::get('ai-studio', [Admin\AiStudioController::class, 'index'])->name('ai.index');
     Route::post('ai-studio/provider', [Admin\AiStudioController::class, 'saveProvider'])->name('ai.provider');
     Route::post('ai-studio/provider/test', [Admin\AiStudioController::class, 'testProvider'])->name('ai.test');
+    Route::post('ai-studio/labelling/auto', [Admin\AiStudioController::class, 'autoLabelAll'])->name('ai.autoLabel');
+    Route::post('ai-studio/songs/{song}/label', [Admin\AiStudioController::class, 'labelSong'])->name('ai.label');
+    Route::post('ai-studio/train', [Admin\AiStudioController::class, 'trainModel'])->name('ai.train');
+    Route::post('ai-studio/validate', [Admin\AiStudioController::class, 'validateModel'])->name('ai.validate');
+    Route::post('ai-studio/songs/{song}/polish', [Admin\AiStudioController::class, 'polishSong'])->name('ai.polish');
+    Route::post('ai-studio/polish-all', [Admin\AiStudioController::class, 'polishAll'])->name('ai.polishAll');
     Route::post('ai-studio/songs/{song}/finetune', [Admin\AiStudioController::class, 'finetuneSong'])->name('ai.finetune');
     Route::put('ai-studio/songs/{song}/manual', [Admin\AiStudioController::class, 'manualFinetune'])->name('ai.manual');
     Route::patch('api-management/rules/{rule}', [Admin\AiStudioController::class, 'updateRule'])->name('api.ruleUpdate');

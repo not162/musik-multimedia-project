@@ -68,11 +68,11 @@ class AiMusicService
                     $usedSource = 'ai_api';
                 }
             } catch (\Throwable $e) {
-                $warning = 'AI API fallback ke DSP lokal: ' . $e->getMessage();
+                $warning = 'AI sedang menggunakan pengaturan pintar bawaan karena sambungan AI internet belum merespons: ' . $e->getMessage();
                 Log::warning('AI Finetune fallback', ['song_id' => $song->id, 'error' => $e->getMessage()]);
             }
         } else {
-            $warning = 'API AI Key belum dikonfigurasi — menggunakan profil DSP cerdas lokal.';
+            $warning = 'Kunci AI belum diisi — sistem menggunakan pengaturan pintar bawaan agar suara tetap halus dan jernih.';
         }
 
         $profile = $this->normalizeProfile($parsed ?? $this->localHeuristic($song, $directionHint), $directionHint);
@@ -181,15 +181,26 @@ class AiMusicService
             return ['ok' => false, 'message' => 'Render FFmpeg gagal: ' . implode(' ', array_slice($output, -4))];
         }
 
-        // Replace original file cleanly
+        // Cadangkan file asli sekali sebelum diperbarui jika belum ada cadangan
+        $origDir = storage_path('app/public/songs/originals');
+        if (! is_dir($origDir)) {
+            @mkdir($origDir, 0755, true);
+        }
+        $origCopy = $origDir . DIRECTORY_SEPARATOR . 'orig_song_' . $song->id . '_' . basename($src);
+        if (! str_starts_with(basename($src), 'halus_') && ! str_starts_with(basename($src), 'master_') && ! file_exists($origCopy)) {
+            @copy($src, $origCopy);
+        }
+
         $newRel = 'songs/' . basename($tmp);
-        @unlink($src);
+        if (str_starts_with(basename($src), 'halus_') || str_starts_with(basename($src), 'master_')) {
+            @unlink($src);
+        }
         $song->update([
             'file_path'  => $newRel,
             'audio_meta' => $this->probeAudio($song->fresh()),
         ]);
 
-        return ['ok' => true, 'message' => 'Audio berhasil di-mastering via FFmpeg DSP & Loudness Normalization (-14 LUFS).'];
+        return ['ok' => true, 'message' => 'File suara lagu berhasil dirapikan, dihaluskan, dan diseragamkan kenyaringannya.'];
     }
 
     // ── Internal AI HTTP Clients ─────────────────────────────────────
@@ -255,9 +266,28 @@ class AiMusicService
             'direction_hint' => $dirHint ?: 'balanced',
         ];
 
-        return "Analisa lagu berikut dan hasilkan preset fine-tuning audio 10-band (32,64,125,250,500,1k,2k,4k,8k,16k Hz) dalam JSON ketat dengan kunci: "
-            . '{"eq_bands":[10 angka -12 sampai 12],"direction":"balanced|warm_bass|bright_clear|punchy|focus_study","mood":"string pendek bahasa Indonesia","bpm":angka 60-180,"preamp_db":angka -6 sampai 3,"pitch_rate":angka 0.90 sampai 1.10,"mastering_notes":"ringkasan teknis singkat bahasa Indonesia"}'
+        return "Analisa lagu berikut dan hasilkan setelan perapihan suara 10 tingkat (32,64,125,250,500,1k,2k,4k,8k,16k Hz) dalam JSON ketat dengan kunci: "
+            . '{"eq_bands":[10 angka -12 sampai 12],"direction":"balanced|warm_bass|bright_clear|punchy|focus_study","mood":"string pendek bahasa Indonesia","bpm":angka 60-180,"preamp_db":angka -6 sampai 3,"pitch_rate":angka 0.90 sampai 1.10,"mastering_notes":"penjelasan singkat dengan bahasa sehari-hari yang mudah dipahami orang awam, tanpa istilah teknis"}'
             . "\nData lagu:\n" . json_encode($info, JSON_UNESCAPED_UNICODE);
+    }
+
+    /**
+     * Ask configured AI model for structured JSON advice (shared with AudioTrainingService).
+     */
+    public function consultJson(string $prompt): ?array
+    {
+        $setting = self::currentSetting();
+        $apiKey  = $setting->is_active ? $setting->getDecryptedApiKey() : null;
+        if (! $apiKey) {
+            return null;
+        }
+        try {
+            $raw = $this->callAiApi($setting, $apiKey, $prompt);
+            return $this->extractJson($raw);
+        } catch (\Throwable $e) {
+            Log::warning('AI consultJson skipped: ' . $e->getMessage());
+            return null;
+        }
     }
 
     private function extractJson(string $text): ?array
@@ -298,6 +328,14 @@ class AiMusicService
         $bands = $curves[$dir] ?? $curves['balanced'];
         $max   = max(0, ...$bands);
 
+        $plainNotes = [
+            'focus_study'  => 'Suara dirapikan agar terasa lembut, tenang, dan nyaman didengar berlama-lama tanpa membuat telinga cepat lelah.',
+            'punchy'       => 'Ketukan bass lebih terasa dan suara tetap bersih serta bertenaga.',
+            'bright_clear' => 'Suara vokal dan alat musik dibuat lebih jernih, halus, dan terasa dekat.',
+            'warm_bass'    => 'Nuansa bass lebih hangat dan empuk dengan alunan vokal yang lembut.',
+            'balanced'     => 'Keseimbangan bass, vokal, dan nada tinggi dirapikan agar terdengar jernih dan nyaman.',
+        ];
+
         return [
             'eq_bands'        => $bands,
             'direction'       => $dir,
@@ -305,7 +343,7 @@ class AiMusicService
             'bpm'             => str_contains($genre, 'elektronik') ? 124 : (str_contains($genre, 'lofi') ? 82 : 104),
             'preamp_db'       => round(-$max * 0.4, 2),
             'pitch_rate'      => 1.0,
-            'mastering_notes' => "Kurva DSP {$dir} disesuaikan untuk karakter {$song->genre?->name} dengan proteksi headroom anti-clipping.",
+            'mastering_notes' => $plainNotes[$dir] ?? $plainNotes['balanced'],
         ];
     }
 
@@ -326,11 +364,11 @@ class AiMusicService
             'bpm'             => max(50, min(200, (int) ($raw['bpm'] ?? 100))),
             'preamp_db'       => round(max(-6, min(3, (float) ($raw['preamp_db'] ?? 0))), 2),
             'pitch_rate'      => round(max(0.85, min(1.15, (float) ($raw['pitch_rate'] ?? 1.0))), 2),
-            'mastering_notes' => substr((string) ($raw['mastering_notes'] ?? 'Fine-tuning selesai.'), 0, 1000),
+            'mastering_notes' => substr((string) ($raw['mastering_notes'] ?? 'Suara lagu telah dirapikan agar lebih nyaman didengar.'), 0, 1000),
         ];
     }
 
-    private function findFfmpeg(): ?string
+    public function findFfmpeg(): ?string
     {
         foreach ([
             'C:\\ProgramData\\chocolatey\\bin\\ffmpeg.exe',

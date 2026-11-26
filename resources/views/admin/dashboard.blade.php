@@ -1,7 +1,7 @@
 @extends('layouts.musikku')
-@section('title', 'Admin')
+@section('title', 'Ringkasan Admin')
 @section('content')
-<h1>⚙️ Panel admin</h1>
+<h1>⚙️ Ringkasan Pengelola Musikku</h1>
 @include('admin._nav')
 <div class="stats">@foreach($stats as $label => $v)<div class="stat"><small>{{ $label }}</small><b>{{ number_format($v) }}</b></div>@endforeach</div>
 

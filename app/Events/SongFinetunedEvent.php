@@ -23,20 +23,24 @@ class SongFinetunedEvent implements ShouldBroadcastNow
         $song->loadMissing(['artist:id,name', 'recordLabel:id,name,slug']);
 
         $this->payload = [
-            'song_id'       => $song->id,
-            'title'         => $song->title,
-            'artist'        => $song->artist?->name ?? 'Artis',
-            'label'         => $song->recordLabel?->name,
-            'is_finetuned'  => (bool) $song->is_ai_finetuned,
-            'mood'          => $song->ai_mood,
-            'bpm'           => $song->ai_tempo_bpm,
-            'direction'     => $song->ai_direction,
-            'eq_bands'      => $song->ai_eq_bands,
-            'preamp_db'     => (float) $song->ai_preamp_db,
-            'pitch_rate'    => (float) ($song->ai_pitch_rate ?: 1.0),
-            'notes'         => $song->ai_mastering_notes,
-            'source'        => $source,
-            'updated_at'    => now()->format('H:i:s'),
+            'song_id'           => $song->id,
+            'title'             => $song->title,
+            'artist'            => $song->artist?->name ?? 'Artis',
+            'label'             => $song->recordLabel?->name,
+            'is_finetuned'      => (bool) $song->is_ai_finetuned,
+            'is_voice_smoothed' => (bool) $song->is_voice_smoothed,
+            'voice_preset'      => $song->voice_preset,
+            'clarity_score'     => $song->voice_clarity_score,
+            'smoothness_score'  => $song->voice_smoothness_score,
+            'mood'              => $song->ai_mood,
+            'bpm'               => $song->ai_tempo_bpm,
+            'direction'         => $song->ai_direction,
+            'eq_bands'          => $song->ai_eq_bands,
+            'preamp_db'         => (float) $song->ai_preamp_db,
+            'pitch_rate'        => (float) ($song->ai_pitch_rate ?: 1.0),
+            'notes'             => $song->ai_mastering_notes,
+            'source'            => $source,
+            'updated_at'        => now()->format('H:i:s'),
         ];
     }
 
