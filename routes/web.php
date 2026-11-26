@@ -9,6 +9,7 @@ use App\Http\Controllers\{
     GenreController,
     HistoryController,
     HomeController,
+    LabelController,
     PlaylistController,
     SeoController,
     SongController,
@@ -30,6 +31,8 @@ Route::post('/lagu/{song}/played', [SongController::class, 'played'])->middlewar
 Route::get('/artis/{artist}', [ArtistController::class, 'show'])->name('artists.show');
 Route::get('/album/{album}', [AlbumController::class, 'show'])->name('albums.show');
 Route::get('/genre/{genre}', [GenreController::class, 'show'])->name('genres.show');
+Route::get('/label', [LabelController::class, 'index'])->name('labels.index');
+Route::get('/label/{label:slug}', [LabelController::class, 'show'])->name('labels.show');
 Route::get('/p/{playlist}', [PlaylistController::class, 'publicShow'])->name('playlists.public');
 
 // ---- SEO & PWA ----
@@ -45,17 +48,17 @@ Route::middleware('guest')->group(function () {
     Route::post('/daftar', [AuthController::class, 'register'])->middleware('throttle:8,1');
 });
 
-// ---- Pengguna Login (Role User & Admin — Fitur Terbuka) ----
+// ---- Pengguna Login (Role User & Admin) ----
 Route::middleware('auth')->group(function () {
     Route::post('/keluar', [AuthController::class, 'logout'])->name('logout');
 
-    // Akun, Keamanan, Preferensi Pro Player, & API Token
+    // Profil & Preferensi (Token API khusus Admin)
     Route::get('/akun', [AccountController::class, 'index'])->name('account.index');
     Route::put('/akun', [AccountController::class, 'updateProfile'])->name('account.update');
     Route::put('/akun/sandi', [AccountController::class, 'changePassword'])->name('account.password');
     Route::put('/akun/preferensi', [AccountController::class, 'updatePreferences'])->name('account.preferences');
-    Route::post('/akun/tokens', [AccountController::class, 'createToken'])->name('account.tokens.create');
-    Route::delete('/akun/tokens/{tokenId}', [AccountController::class, 'revokeToken'])->name('account.tokens.revoke');
+    Route::post('/akun/tokens', [AccountController::class, 'createToken'])->middleware(EnsureAdmin::class)->name('account.tokens.create');
+    Route::delete('/akun/tokens/{tokenId}', [AccountController::class, 'revokeToken'])->middleware(EnsureAdmin::class)->name('account.tokens.revoke');
 
     Route::get('/favorit', [FavoriteController::class, 'index'])->name('favorites.index');
     Route::post('/favorit/{song}', [FavoriteController::class, 'toggle'])->name('favorites.toggle');
@@ -78,10 +81,19 @@ Route::middleware(['auth', EnsureAdmin::class])->prefix('admin')->name('admin.')
     Route::resource('songs', Admin\SongController::class)->except('show');
     Route::resource('artists', Admin\ArtistController::class)->except('show');
     Route::resource('albums', Admin\AlbumController::class)->except('show');
+    Route::resource('labels', Admin\LabelController::class)->except('show');
 
     Route::get('genres', [Admin\GenreController::class, 'index'])->name('genres.index');
     Route::post('genres', [Admin\GenreController::class, 'store'])->name('genres.store');
     Route::delete('genres/{genre}', [Admin\GenreController::class, 'destroy'])->name('genres.destroy');
+
+    // AI Audio Fine-Tuning & API Management Studio (Admin Only)
+    Route::get('ai-studio', [Admin\AiStudioController::class, 'index'])->name('ai.index');
+    Route::post('ai-studio/provider', [Admin\AiStudioController::class, 'saveProvider'])->name('ai.provider');
+    Route::post('ai-studio/provider/test', [Admin\AiStudioController::class, 'testProvider'])->name('ai.test');
+    Route::post('ai-studio/songs/{song}/finetune', [Admin\AiStudioController::class, 'finetuneSong'])->name('ai.finetune');
+    Route::put('ai-studio/songs/{song}/manual', [Admin\AiStudioController::class, 'manualFinetune'])->name('ai.manual');
+    Route::patch('api-management/rules/{rule}', [Admin\AiStudioController::class, 'updateRule'])->name('api.ruleUpdate');
 
     Route::get('users', [Admin\UserController::class, 'index'])->name('users.index');
     Route::patch('users/{user}/role', [Admin\UserController::class, 'toggleRole'])->name('users.role');

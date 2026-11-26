@@ -17,10 +17,12 @@ class SongController extends Controller
         $cacheKey = 'api:songs:' . md5($request->fullUrl());
 
         $songs = Cache::remember($cacheKey, 120, function () use ($request) {
-            return Song::with(['artist:id,name', 'album:id,title,cover', 'genre:id,name'])
+            return Song::with(['artist:id,name', 'album:id,title,cover', 'genre:id,name', 'recordLabel:id,name,slug'])
                 ->search($request->query('q'))
                 ->when($request->query('genre'), fn ($q, $g) => $q->where('genre_id', $g))
                 ->when($request->query('artist'), fn ($q, $a) => $q->where('artist_id', $a))
+                ->when($request->query('label'), fn ($q, $l) => $q->where('record_label_id', $l))
+                ->when($request->boolean('finetuned'), fn ($q) => $q->where('is_ai_finetuned', true))
                 ->when($request->query('sort') === 'popular', fn ($q) => $q->orderByDesc('play_count'))
                 ->when($request->query('sort') === 'title', fn ($q) => $q->orderBy('title'))
                 ->when(! in_array($request->query('sort'), ['popular', 'title']), fn ($q) => $q->latest())
@@ -33,10 +35,10 @@ class SongController extends Controller
 
     public function show(Song $song): JsonResponse
     {
-        $song->load(['artist', 'album', 'genre']);
+        $song->load(['artist', 'album', 'genre', 'recordLabel']);
 
         $related = Cache::remember("api:song:{$song->id}:related", 300, function () use ($song) {
-            return Song::with(['artist:id,name'])
+            return Song::with(['artist:id,name', 'recordLabel:id,name,slug'])
                 ->where('id', '!=', $song->id)
                 ->where(fn ($q) => $q->where('artist_id', $song->artist_id)
                     ->when($song->genre_id, fn ($w) => $w->orWhere('genre_id', $song->genre_id)))
@@ -46,6 +48,31 @@ class SongController extends Controller
         return response()->json([
             'song'    => $song,
             'related' => $related,
+        ]);
+    }
+
+    /**
+     * Connected endpoint: returns Admin's AI fine-tuning DSP profile for this song
+     * so User player & Public preview can apply it seamlessly in real-time.
+     */
+    public function aiProfile(Song $song): JsonResponse
+    {
+        $song->loadMissing(['artist:id,name', 'recordLabel:id,name,slug']);
+
+        return response()->json([
+            'song_id'          => $song->id,
+            'title'            => $song->title,
+            'label'            => $song->recordLabel,
+            'is_ai_finetuned'  => (bool) $song->is_ai_finetuned,
+            'mood'             => $song->ai_mood,
+            'bpm'              => $song->ai_tempo_bpm,
+            'direction'        => $song->ai_direction,
+            'eq_bands'         => $song->ai_eq_bands ?? [0,0,0,0,0,0,0,0,0,0],
+            'preamp_db'        => (float) $song->ai_preamp_db,
+            'pitch_rate'       => (float) ($song->ai_pitch_rate ?: 1.0),
+            'mastering_notes'  => $song->ai_mastering_notes,
+            'audio_meta'       => $song->audio_meta,
+            'finetuned_at'     => $song->ai_finetuned_at?->toIso8601String(),
         ]);
     }
 

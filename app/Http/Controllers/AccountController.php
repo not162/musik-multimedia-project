@@ -15,8 +15,10 @@ class AccountController extends Controller
     public function index()
     {
         $user = auth()->user();
-        $tokens = $user->tokens()->latest()->get();
-        $recentAudits = AuditLog::where('user_id', $user->id)->latest('created_at')->limit(10)->get();
+        $tokens = $user->isAdmin() ? $user->tokens()->latest()->get() : collect();
+        $recentAudits = $user->isAdmin()
+            ? AuditLog::where('user_id', $user->id)->latest('created_at')->limit(10)->get()
+            : collect();
 
         return view('account.index', [
             'user'         => $user,
@@ -88,10 +90,11 @@ class AccountController extends Controller
 
     public function createToken(Request $request)
     {
+        abort_unless($request->user()->isAdmin(), 403, 'Akses pembuatan token API khusus akun Admin.');
         $data = $request->validate(['token_name' => 'required|string|max:60']);
         $user = $request->user();
 
-        $abilities = $user->isAdmin() ? ['admin', 'user'] : ['user'];
+        $abilities = ['admin', 'user'];
         $token = $user->createToken($data['token_name'], $abilities)->plainTextToken;
 
         AuditLog::record('create_api_token', 'User', $user->id, description: "Created API token: {$data['token_name']}");
@@ -103,6 +106,7 @@ class AccountController extends Controller
 
     public function revokeToken(int $tokenId)
     {
+        abort_unless(auth()->user()->isAdmin(), 403, 'Akses pencabutan token API khusus akun Admin.');
         $user = auth()->user();
         $user->tokens()->where('id', $tokenId)->delete();
 

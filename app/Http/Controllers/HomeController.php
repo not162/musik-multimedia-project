@@ -1,7 +1,7 @@
 <?php
 namespace App\Http\Controllers;
 
-use App\Models\{Album, Artist, Genre, LrsStatement, PlayHistory, Playlist, Song};
+use App\Models\{Album, Artist, Genre, LrsStatement, PlayHistory, Playlist, RecordLabel, Song};
 use App\Services\LrsService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -10,7 +10,7 @@ class HomeController extends Controller
 {
     public function index()
     {
-        $with = ['artist', 'album', 'genre'];
+        $with = ['artist', 'album', 'genre', 'recordLabel'];
 
         $recommended = collect();
         $userStats   = null;
@@ -34,11 +34,17 @@ class HomeController extends Controller
         }
 
         $platformStats = Cache::remember('home:stats', 120, fn () => [
-            'songs'     => Song::count(),
-            'artists'   => Artist::count(),
-            'albums'    => Album::count(),
-            'plays'     => (int) Song::sum('play_count'),
+            'songs'       => Song::count(),
+            'artists'     => Artist::count(),
+            'albums'      => Album::count(),
+            'labels'      => RecordLabel::count(),
+            'ai_tuned'    => Song::where('is_ai_finetuned', true)->count(),
+            'plays'       => (int) Song::sum('play_count'),
         ]);
+
+        $labels = Cache::remember('home:labels', 180, fn () =>
+            RecordLabel::withCount('songs')->orderByDesc('is_featured')->latest()->limit(6)->get()
+        );
 
         $publicPlaylists = Playlist::with('user:id,name')
             ->withCount('songs')
@@ -56,6 +62,7 @@ class HomeController extends Controller
             'albums'          => Album::with('artist')->latest()->limit(6)->get(),
             'artists'         => Artist::withCount('songs')->orderByDesc('songs_count')->limit(6)->get(),
             'genres'          => Genre::withCount('songs')->orderBy('name')->get(),
+            'labels'          => $labels,
             'recommended'     => $recommended,
             'platformStats'   => $platformStats,
             'publicPlaylists' => $publicPlaylists,

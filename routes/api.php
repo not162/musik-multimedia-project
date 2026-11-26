@@ -1,7 +1,7 @@
 <?php
 /**
  * Phase 1: RESTful API routes — versioned under /api/v1
- * Connected with Guest (Public), User, and Admin roles.
+ * Connected across Guest (Public), User, and Admin roles with dynamic API Management rules.
  */
 
 use App\Http\Controllers\Api\V1;
@@ -33,10 +33,17 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         ->middleware('throttle:api-auth')
         ->name('login');
 
-    // ── Public Catalog (cached via ETag + server cache, rate-limited) ─
+    // ── Public Catalog + Labels + AI DSP Profile (connected to Admin API Management) ─
     Route::middleware(['throttle:api-public', 'cache.response'])->group(function () {
-        Route::get('songs', [V1\SongController::class, 'index'])->name('songs.index');
+        Route::get('songs', [V1\SongController::class, 'index'])
+            ->middleware('api.rule:public.songs')
+            ->name('songs.index');
         Route::get('songs/{song}', [V1\SongController::class, 'show'])->name('songs.show');
+        Route::get('songs/{song}/ai-profile', [V1\SongController::class, 'aiProfile'])->name('songs.ai-profile');
+        Route::get('labels', [V1\LabelController::class, 'index'])
+            ->middleware('api.rule:public.labels')
+            ->name('labels.index');
+        Route::get('labels/{label}', [V1\LabelController::class, 'show'])->name('labels.show');
         Route::get('artists', [V1\ArtistController::class, 'index'])->name('artists.index');
         Route::get('artists/{artist}', [V1\ArtistController::class, 'show'])->name('artists.show');
         Route::get('albums', [V1\AlbumController::class, 'index'])->name('albums.index');
@@ -65,15 +72,20 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::put('me/preferences', [V1\AuthController::class, 'updatePreferences'])->name('me.preferences');
 
         // Favorites CRUD
-        Route::get('favorites', [V1\FavoriteController::class, 'index'])->name('favorites.index');
-        Route::post('favorites/{song}', [V1\FavoriteController::class, 'toggle'])->name('favorites.toggle');
+        Route::get('favorites', [V1\FavoriteController::class, 'index'])
+            ->middleware('api.rule:user.favorites')
+            ->name('favorites.index');
+        Route::post('favorites/{song}', [V1\FavoriteController::class, 'toggle'])
+            ->middleware('api.rule:user.favorites')
+            ->name('favorites.toggle');
 
         // History Read + Delete
         Route::get('history', [V1\HistoryController::class, 'index'])->name('history.index');
         Route::delete('history', [V1\HistoryController::class, 'clear'])->name('history.clear');
 
         // Playlists full CRUD
-        Route::apiResource('playlists', V1\PlaylistController::class);
+        Route::apiResource('playlists', V1\PlaylistController::class)
+            ->middleware('api.rule:user.playlists');
         Route::post('playlists/{playlist}/songs/{song}', [V1\PlaylistController::class, 'addSong'])->name('playlists.songs.add');
         Route::delete('playlists/{playlist}/songs/{song}', [V1\PlaylistController::class, 'removeSong'])->name('playlists.songs.remove');
     });
@@ -86,6 +98,15 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
             Route::apiResource('artists', V1\Admin\ArtistController::class);
             Route::apiResource('albums', V1\Admin\AlbumController::class);
             Route::apiResource('genres', V1\Admin\GenreController::class);
+            Route::apiResource('labels', V1\Admin\LabelController::class);
+
+            // AI Music Fine-Tuning & API Management
+            Route::get('ai/status', [V1\Admin\AiStudioController::class, 'status'])->name('ai.status');
+            Route::post('ai/provider', [V1\Admin\AiStudioController::class, 'saveProvider'])->name('ai.provider');
+            Route::post('ai/songs/{song}/finetune', [V1\Admin\AiStudioController::class, 'finetuneSong'])
+                ->middleware('api.rule:admin.ai')
+                ->name('ai.finetune');
+            Route::patch('api-management/rules/{rule}', [V1\Admin\AiStudioController::class, 'updateRule'])->name('api-management.rules.update');
 
             // Users CRUD + role/status/unlock
             Route::get('users', [V1\Admin\UserController::class, 'index'])->name('users.index');

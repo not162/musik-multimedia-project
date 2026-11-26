@@ -149,6 +149,15 @@
   </div>
 @endif
 
+@if(isset($labels) && $labels->count())
+  <h2>🏷️ Daftar Label Musik Baru <a class="btn ghost sm" href="{{ route('labels.index') }}">Lihat Semua →</a></h2>
+  <div class="grid" id="liveLabelsGrid">
+    @foreach($labels as $lb)
+      @include('partials.card', ['m' => $lb, 'href' => route('labels.show', $lb), 'title' => $lb->name, 'sub' => ($lb->country ?? 'Label').' · '.$lb->songs_count.' lagu'])
+    @endforeach
+  </div>
+@endif
+
 @if($genres->count())
   <h2>Genre</h2>
   <div class="chips">@foreach($genres as $g)<a class="chip" href="{{ route('genres.show', $g) }}">{{ $g->name }} <small>{{ $g->songs_count }}</small></a>@endforeach</div>

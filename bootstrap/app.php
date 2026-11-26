@@ -6,6 +6,7 @@ use Illuminate\Foundation\Configuration\Middleware;
 use App\Http\Middleware\{
     CacheResponse,
     CheckAccountLock,
+    EnforceApiRule,
     EnsureAdmin,
     ForceHttps,
     LoadBalancerHeaders,
@@ -46,6 +47,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'admin'          => EnsureAdmin::class,
             'active.user'    => CheckAccountLock::class,
             'cache.response' => CacheResponse::class,
+            'api.rule'       => EnforceApiRule::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

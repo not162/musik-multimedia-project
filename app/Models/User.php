@@ -69,13 +69,15 @@ class User extends Authenticatable
         $userFeatures = [
             'favorites', 'playlists', 'history', 'recommendations',
             'equalizer', 'playback_speed', 'sleep_timer',
-            'offline_pwa_audio', 'realtime_presence', 'api_tokens',
+            'offline_pwa_audio', 'realtime_presence',
         ];
 
         if ($this->isAdmin()) {
             return array_merge($userFeatures, [
-                'admin_catalog_crud', 'admin_users', 'admin_error_alerts',
-                'admin_lrs_audit', 'admin_backups', 'admin_seo', 'admin_health',
+                'api_tokens', 'api_management', 'ai_music_finetuning',
+                'record_labels_crud', 'admin_catalog_crud', 'admin_users',
+                'admin_error_alerts', 'admin_lrs_audit', 'admin_backups',
+                'admin_seo', 'admin_health',
             ]);
         }
 

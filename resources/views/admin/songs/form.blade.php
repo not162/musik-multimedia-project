@@ -15,8 +15,9 @@
   </div>
   <div class="row2">
     <label>Album <select name="album_id"><option value="">— (single)</option>@foreach($albums as $al)<option value="{{ $al->id }}" @selected(old('album_id', $song->album_id) == $al->id)>{{ $al->title }} — {{ $al->artist->name }}</option>@endforeach</select></label>
-    <label>Durasi (detik, terisi otomatis) <input type="number" id="duration" name="duration" min="0" value="{{ old('duration', $song->duration) }}"></label>
+    <label>Label Musik <select name="record_label_id"><option value="">— (independen)</option>@foreach($labels as $lb)<option value="{{ $lb->id }}" @selected(old('record_label_id', $song->record_label_id) == $lb->id)>{{ $lb->name }}</option>@endforeach</select></label>
   </div>
+  <label>Durasi (detik, terisi otomatis) <input type="number" id="duration" name="duration" min="0" value="{{ old('duration', $song->duration) }}"></label>
   <label>File audio (mp3/wav/ogg/m4a/aac/flac, maks 30 MB){{ $song->exists ? ' — kosongkan bila tidak diganti' : '' }}
     <input type="file" id="audioFile" name="audio" accept="audio/*" {{ $song->exists ? '' : 'required' }}></label>
   <label>Cover (opsional, maks 2 MB) <input type="file" name="cover" accept="image/*"></label>

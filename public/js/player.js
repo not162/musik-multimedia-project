@@ -159,6 +159,12 @@
     }
 
     if (eqState.eq_mode === 'auto_genre') {
+      const aiEq = cur()?.aiEq;
+      if (Array.isArray(aiEq) && aiEq.length === 10) {
+        return EQ_FREQS.map((_, i) =>
+          clamp(Number(aiEq[i] || 0) * intensity + dirCurve[i] * (0.3 * intensity) + macroVec[i], -12, 12)
+        );
+      }
       const gKey = (cur()?.genre || '').toLowerCase().trim();
       const gCurve = GENRE_CURVES[gKey] || EQ_DIRECTIONS.balanced;
       return EQ_FREQS.map((_, i) =>
@@ -412,11 +418,16 @@
     clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 2600);
   };
 
-  const itemFrom = r => ({
-    id: +r.dataset.id, src: r.dataset.src, title: r.dataset.title, artist: r.dataset.artist,
-    genre: r.dataset.genre || '', href: r.dataset.href, cover: r.dataset.cover,
-    grad: r.dataset.grad, fav: r.dataset.fav === '1',
-  });
+  const itemFrom = r => {
+    let aiEq = null;
+    try { aiEq = r.dataset.aiEq ? JSON.parse(r.dataset.aiEq) : null; } catch {}
+    return {
+      id: +r.dataset.id, src: r.dataset.src, title: r.dataset.title, artist: r.dataset.artist,
+      genre: r.dataset.genre || '', label: r.dataset.label || '',
+      aiEq, aiMood: r.dataset.aiMood || '', aiPitch: Number(r.dataset.aiPitch || 1),
+      href: r.dataset.href, cover: r.dataset.cover, grad: r.dataset.grad, fav: r.dataset.fav === '1',
+    };
+  };
   const cur = () => st.queue[st.i];
 
   function renderNow() {
@@ -587,6 +598,21 @@
   function syncPlayer() { setPlayerVisible(st.hasPlayed); markPlaying(); }
   document.addEventListener('turbo:load', syncPlayer);
   document.addEventListener('turbo:render', syncPlayer);
+
+  window.addEventListener('musikku:song-finetuned', (ev) => {
+    const d = ev.detail || {};
+    st.queue.forEach(it => {
+      if (it.id === +d.song_id) {
+        it.aiEq = d.eq_bands || it.aiEq;
+        it.aiMood = d.mood || it.aiMood;
+        it.aiPitch = Number(d.pitch_rate || 1);
+      }
+    });
+    if (cur()?.id === +d.song_id && isAuth()) {
+      applyEqToAudio(true);
+      syncEqControlsFromState();
+    }
+  });
 
   el.play.onclick = toggle; el.next.onclick = () => next(false); el.prev.onclick = prev;
   el.shuf.onclick = () => setShuffle(!st.shuffle);

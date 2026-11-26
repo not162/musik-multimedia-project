@@ -89,13 +89,29 @@
         conn.bind('error', () => setStatus('WS Standby', false));
       }
 
-      // 1. Public Channel: Live song plays & catalog updates
+      // 1. Public Channel: Live song plays, AI fine-tuning & catalog/label updates
       echo.channel('musikku.live')
         .listen('.song.played', (e) => {
           appendLiveFeed(e);
         })
+        .listen('.song.finetuned', (e) => {
+          window.musikkuToast?.(`✨ AI Fine-Tuning diperbarui: ${e.title}${e.mood ? ' (' + e.mood + ')' : ''}`);
+          document.querySelectorAll(`.song-row[data-id="${e.song_id}"]`).forEach((row) => {
+            if (e.eq_bands) row.dataset.aiEq = JSON.stringify(e.eq_bands);
+            row.dataset.aiMood = e.mood || '';
+            row.dataset.aiPreamp = String(e.preamp_db ?? 0);
+            row.dataset.aiPitch = String(e.pitch_rate ?? 1);
+            if (e.label) row.dataset.label = e.label;
+            const slot = row.querySelector('.js-ai-badge');
+            if (slot) {
+              slot.innerHTML = `<span class="badge ok">✨ AI${e.mood ? ' · ' + e.mood : ''}</span>`;
+            }
+          });
+          window.dispatchEvent(new CustomEvent('musikku:song-finetuned', { detail: e }));
+        })
         .listen('.catalog.updated', (e) => {
-          window.musikkuToast?.(`Katalog diperbarui: ${e.title}`);
+          const prefix = e.type === 'label' ? '🏷️ Label Musik Baru' : 'Katalog diperbarui';
+          window.musikkuToast?.(`${prefix}: ${e.title}`);
         });
 
       // 2. Registered User Channels (Presence + Private Notifications)

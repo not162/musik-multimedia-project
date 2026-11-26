@@ -3,6 +3,10 @@
   <url><loc>{{ url('/') }}</loc><changefreq>daily</changefreq><priority>1.0</priority></url>
   <url><loc>{{ route('songs.index') }}</loc><changefreq>daily</changefreq><priority>0.9</priority></url>
   <url><loc>{{ route('charts') }}</loc><changefreq>daily</changefreq><priority>0.9</priority></url>
+  <url><loc>{{ route('labels.index') }}</loc><changefreq>daily</changefreq><priority>0.8</priority></url>
+  @foreach($labels as $lb)
+  <url><loc>{{ route('labels.show', $lb) }}</loc><lastmod>{{ $lb->updated_at->toAtomString() }}</lastmod><changefreq>weekly</changefreq><priority>0.7</priority></url>
+  @endforeach
   @foreach($songs as $s)
   <url><loc>{{ route('songs.show', $s) }}</loc><lastmod>{{ $s->updated_at->toAtomString() }}</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
   @endforeach

@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\{Album, Artist, Genre, Playlist, Song};
+use App\Models\{Album, Artist, Genre, Playlist, RecordLabel, Song};
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\{Cache, DB};
 
@@ -18,9 +18,10 @@ class SeoController extends Controller
             $artists   = Artist::select(['id', 'updated_at'])->get();
             $albums    = Album::select(['id', 'updated_at'])->get();
             $genres    = Genre::select(['id', 'updated_at'])->get();
+            $labels    = RecordLabel::select(['id', 'slug', 'updated_at'])->get();
             $playlists = Playlist::where('is_public', true)->select(['id', 'updated_at'])->get();
 
-            return view('seo.sitemap', compact('songs', 'artists', 'albums', 'genres', 'playlists'))->render();
+            return view('seo.sitemap', compact('songs', 'artists', 'albums', 'genres', 'labels', 'playlists'))->render();
         });
 
         return response($xml, 200, ['Content-Type' => 'application/xml; charset=UTF-8']);

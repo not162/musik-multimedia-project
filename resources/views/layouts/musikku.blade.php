@@ -80,15 +80,20 @@
       <a href="{{ route('home') }}" class="{{ request()->routeIs('home') ? 'on' : '' }}">🏠 Beranda</a>
       <a href="{{ route('songs.index') }}" class="{{ request()->routeIs('songs.*') ? 'on' : '' }}">🎧 Jelajah</a>
       <a href="{{ route('charts') }}" class="{{ request()->routeIs('charts') ? 'on' : '' }}">📈 Chart</a>
+      <a href="{{ route('labels.index') }}" class="{{ request()->routeIs('labels.*') ? 'on' : '' }}">🏷️ Label Musik</a>
       @auth
         <div class="sep">Fitur Terbuka</div>
         <a href="{{ route('favorites.index') }}" class="{{ request()->routeIs('favorites.*') ? 'on' : '' }}">♥ Favorit</a>
         <a href="{{ route('playlists.index') }}" class="{{ request()->routeIs('playlists.index', 'playlists.show') ? 'on' : '' }}">📂 Playlist</a>
         <a href="{{ route('history.index') }}" class="{{ request()->routeIs('history.*') ? 'on' : '' }}">🕘 Riwayat</a>
-        <a href="{{ route('account.index') }}" class="{{ request()->routeIs('account.*') ? 'on' : '' }}">🎛️ Akun & API</a>
+        <a href="{{ route('account.index') }}" class="{{ request()->routeIs('account.*') ? 'on' : '' }}">
+          {{ auth()->user()->isAdmin() ? '🎛️ Akun & API' : '👤 Profil Saya' }}
+        </a>
         @if(auth()->user()->isAdmin())
           <div class="sep">Admin</div>
           <a href="{{ route('admin.dashboard') }}" class="{{ request()->routeIs('admin.dashboard') ? 'on' : '' }}">⚙️ Panel Admin</a>
+          <a href="{{ route('admin.ai.index') }}" class="{{ request()->routeIs('admin.ai.*') ? 'on' : '' }}">🤖 AI Audio & API</a>
+          <a href="{{ route('admin.labels.index') }}" class="{{ request()->routeIs('admin.labels.*') ? 'on' : '' }}">🏷️ Kelola Label</a>
           <a href="{{ route('admin.logs.index') }}" class="{{ request()->routeIs('admin.logs.*') ? 'on' : '' }}">
             🚨 Error & Alert
             <span id="adminAlertBadge" class="badge danger {{ ($unresolvedErrorsCount ?? 0) > 0 ? '' : 'hidden' }}">{{ $unresolvedErrorsCount ?? 0 }}</span>

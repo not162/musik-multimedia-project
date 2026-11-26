@@ -2,9 +2,10 @@
 
 namespace App\Http\Controllers\Api\V1\Admin;
 
-use App\Events\CatalogUpdatedEvent;
+use App\Events\{CatalogUpdatedEvent, SongFinetunedEvent};
 use App\Http\Controllers\Controller;
 use App\Models\{AuditLog, Song};
+use App\Services\AiMusicService;
 use App\Support\SafeBroadcast;
 use Illuminate\Http\{JsonResponse, Request};
 use Illuminate\Support\Facades\{Cache, Storage};
@@ -27,15 +28,20 @@ class SongController extends Controller
         return response()->json(['song' => $song->load(['artist', 'album', 'genre'])]);
     }
 
-    public function store(Request $request): JsonResponse
+    public function store(Request $request, AiMusicService $ai): JsonResponse
     {
         $data = $this->validated($request);
         $song = Song::create($data);
 
+        if ($ai::currentSetting()->auto_finetune_realtime) {
+            $res = $ai->finetuneSong($song);
+            SafeBroadcast::dispatch(new SongFinetunedEvent($res['song'], $res['source']));
+        }
+
         AuditLog::record('create', 'Song', $song->id, newValues: $data, description: "Created song: {$song->title}");
         $this->bustAndNotify('created', $song);
 
-        return response()->json(['message' => 'Lagu diunggah.', 'song' => $song], 201);
+        return response()->json(['message' => 'Lagu diunggah.', 'song' => $song->fresh(['recordLabel'])], 201);
     }
 
     public function update(Request $request, Song $song): JsonResponse
@@ -71,11 +77,12 @@ class SongController extends Controller
     private function validated(Request $request, ?Song $song = null): array
     {
         $data = $request->validate([
-            'title'     => 'required|string|max:150',
-            'artist_id' => 'required|exists:artists,id',
-            'album_id'  => 'nullable|exists:albums,id',
-            'genre_id'  => 'nullable|exists:genres,id',
-            'duration'  => 'nullable|integer|min:0|max:36000',
+            'title'           => 'required|string|max:150',
+            'artist_id'       => 'required|exists:artists,id',
+            'album_id'        => 'nullable|exists:albums,id',
+            'genre_id'        => 'nullable|exists:genres,id',
+            'record_label_id' => 'nullable|exists:record_labels,id',
+            'duration'        => 'nullable|integer|min:0|max:36000',
             'lyrics'    => 'nullable|string|max:20000',
             'audio'     => ($song ? 'nullable' : 'required') . '|file|mimes:mp3,wav,ogg,m4a,aac,flac|max:30720',
             'cover'     => 'nullable|image|max:2048',

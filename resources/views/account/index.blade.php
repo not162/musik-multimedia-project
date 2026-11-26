@@ -1,19 +1,21 @@
 @extends('layouts.musikku')
-@section('title', 'Akun & API')
+@section('title', $user->isAdmin() ? 'Akun & API' : 'Profil Saya')
 @section('content')
-<h1>🎛️ Akun, Fitur Terbuka & Akses API</h1>
+<h1>{{ $user->isAdmin() ? '🎛️ Akun Admin, Keamanan & Akses API' : '👤 Profil Saya & Pengaturan Audio' }}</h1>
 @include('partials.errors')
 
 <div class="panel">
   <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
     <div>
       <span class="badge ok">PERAN: {{ strtoupper($user->role) }}</span>
-      <span class="badge info">HASH: {{ strtoupper(config('hashing.driver')) }} (Rounds {{ config('hashing.bcrypt.rounds') }})</span>
-      @if($user->password_salt)
-        <span class="badge">SALT ID: {{ substr($user->password_salt, 0, 12) }}…</span>
+      @if($user->isAdmin())
+        <span class="badge info">HASH: {{ strtoupper(config('hashing.driver')) }} (Rounds {{ config('hashing.bcrypt.rounds') }})</span>
+        @if($user->password_salt)
+          <span class="badge">SALT ID: {{ substr($user->password_salt, 0, 12) }}…</span>
+        @endif
       @endif
     </div>
-    <small class="mut">Login terakhir: {{ $user->last_login_at?->format('d/m/Y H:i') ?? 'Baru saja' }} ({{ $user->last_login_ip ?? request()->ip() }})</small>
+    <small class="mut">Login terakhir: {{ $user->last_login_at?->format('d/m/Y H:i') ?? 'Baru saja' }}</small>
   </div>
   <h3 style="margin-top:12px">🔓 Fitur yang Terbuka untuk Akun Anda</h3>
   <div class="chips" style="margin-top:8px">
@@ -44,7 +46,7 @@
   </div>
 
   <div class="panel">
-    <h3>Ubah Kata Sandi (Hashing & Salting)</h3>
+    <h3>Ubah Kata Sandi</h3>
     <form method="POST" action="{{ route('account.password') }}" class="form">@csrf @method('PUT')
       <label>Kata sandi saat ini <input type="password" name="current_password" required></label>
       <label>Kata sandi baru (min. 8, huruf besar/kecil & angka) <input type="password" name="password" required minlength="8"></label>
@@ -54,19 +56,25 @@
   </div>
 </div>
 
+@if($user->isAdmin())
 <div class="panel">
-  <h3>🔑 Personal API Token (Sanctum Bearer Auth)</h3>
-  <p class="mut" style="font-size:13px">Gunakan token ini untuk mengakses endpoint REST API <code class="inline">/api/v1/*</code> sesuai peran <code class="inline">{{ $user->role }}</code>.</p>
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+    <div>
+      <h3 style="margin:0">🔑 Personal API Token (Khusus Admin)</h3>
+      <p class="mut" style="font-size:13px;margin:4px 0 0">Kelola token REST API <code class="inline">/api/v1/*</code> dan lanjutkan ke <a href="{{ route('admin.ai.index') }}"><b>AI Audio Studio & API Management</b></a>.</p>
+    </div>
+    <a class="btn ghost sm" href="{{ route('admin.ai.index') }}">🤖 Buka AI & API Management</a>
+  </div>
 
   @if(session('new_api_token'))
-    <div class="flash">
+    <div class="flash" style="margin-top:12px">
       <b>Salin Token Baru Anda:</b><br>
       <code class="inline" style="word-break:break-all;display:inline-block;margin-top:6px">{{ session('new_api_token') }}</code>
     </div>
   @endif
 
-  <form method="POST" action="{{ route('account.tokens.create') }}" class="actions" style="max-width:440px">@csrf
-    <input name="token_name" placeholder="Nama perangkat / aplikasi (mis. Mobile App)" required maxlength="60">
+  <form method="POST" action="{{ route('account.tokens.create') }}" class="actions" style="max-width:440px;margin-top:12px">@csrf
+    <input name="token_name" placeholder="Nama perangkat / aplikasi (mis. Admin Automation)" required maxlength="60">
     <button class="btn sm">＋ Buat Token</button>
   </form>
 
@@ -91,7 +99,7 @@
 </div>
 
 <div class="panel">
-  <h3>🕒 Aktivitas Keamanan Akun Terbaru</h3>
+  <h3>🕒 Aktivitas Keamanan Akun Terbaru (Admin)</h3>
   <table class="table">
     <tr><th>Aksi</th><th>Keterangan</th><th>IP</th><th>Waktu</th></tr>
     @forelse($recentAudits as $a)
@@ -106,4 +114,5 @@
     @endforelse
   </table>
 </div>
+@endif
 @endsection

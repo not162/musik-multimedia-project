@@ -9,7 +9,14 @@
     <div><a href="{{ route('artists.show', $song->artist) }}"><b>{{ $song->artist->name }}</b></a>
       @if($song->album) · <a href="{{ route('albums.show', $song->album) }}">{{ $song->album->title }}</a>@endif
       @if($song->genre) · <a href="{{ route('genres.show', $song->genre) }}">{{ $song->genre->name }}</a>@endif
+      @if($song->recordLabel) · <a href="{{ route('labels.show', $song->recordLabel) }}">🏷️ {{ $song->recordLabel->name }}</a>@endif
       · {{ $song->duration_label }} · {{ number_format($song->play_count) }}× diputar</div>
+    @if($song->is_ai_finetuned)
+      <div style="margin-top:8px">
+        <span class="badge ok">✨ AI Fine-Tuned · {{ $song->ai_mood }} · {{ $song->ai_tempo_bpm }} BPM</span>
+        @if($song->ai_mastering_notes)<small class="mut" style="display:block;margin-top:4px">{{ $song->ai_mastering_notes }}</small>@endif
+      </div>
+    @endif
   </div>
 </div>
 <div class="song-list" id="one">@include('partials.song-row', ['song' => $song])</div>
