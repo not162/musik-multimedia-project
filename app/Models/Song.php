@@ -11,25 +11,26 @@ class Song extends Model
 
     protected $fillable = [
         'artist_id', 'album_id', 'genre_id', 'record_label_id',
-        'title', 'file_path', 'cover', 'lyrics', 'duration', 'play_count',
+        'title', 'file_path', 'media_format', 'cover', 'lyrics', 'duration', 'play_count',
         'is_ai_finetuned', 'ai_mood', 'ai_tempo_bpm', 'ai_direction',
         'ai_eq_bands', 'ai_preamp_db', 'ai_pitch_rate', 'ai_mastering_notes',
         'ai_finetuned_at', 'audio_meta',
         'training_split', 'voice_preset', 'voice_clarity_score',
-        'voice_smoothness_score', 'noise_reduction_db', 'is_voice_smoothed',
-        'labeled_by', 'labeled_at',
+        'voice_smoothness_score', 'noise_reduction_db', 'target_sample_rate_khz',
+        'hires_file_path', 'is_voice_smoothed', 'labeled_by', 'labeled_at',
     ];
 
     protected $casts = [
-        'is_ai_finetuned'    => 'boolean',
-        'is_voice_smoothed'  => 'boolean',
-        'ai_eq_bands'        => 'array',
-        'ai_preamp_db'       => 'float',
-        'ai_pitch_rate'      => 'float',
-        'noise_reduction_db' => 'float',
-        'ai_finetuned_at'    => 'datetime',
-        'labeled_at'         => 'datetime',
-        'audio_meta'         => 'array',
+        'is_ai_finetuned'        => 'boolean',
+        'is_voice_smoothed'      => 'boolean',
+        'ai_eq_bands'            => 'array',
+        'ai_preamp_db'           => 'float',
+        'ai_pitch_rate'          => 'float',
+        'noise_reduction_db'     => 'float',
+        'target_sample_rate_khz' => 'integer',
+        'ai_finetuned_at'        => 'datetime',
+        'labeled_at'             => 'datetime',
+        'audio_meta'             => 'array',
     ];
 
     public function artist()          { return $this->belongsTo(Artist::class); }

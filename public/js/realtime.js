@@ -5,9 +5,33 @@
 
   const cfg = window.__reverbConfig || {};
   const $ = (s) => document.querySelector(s);
+  const baseUrl = () => (document.body.dataset.base || '').replace(/\/$/, '');
 
   let rtConnected = false;
   let rtDriverLabel = '⚡ Siap';
+  let currentVersion = Number(document.body.dataset.catalogVersion || 1);
+  let refreshTimer = null;
+
+  function canSafelyRefreshCatalogView() {
+    if (document.hidden) return false;
+    if (document.querySelector('dialog[open]')) return false;
+    const tag = document.activeElement?.tagName;
+    if (tag && /INPUT|TEXTAREA|SELECT/.test(tag)) return false;
+    const path = window.location.pathname;
+    if (path.startsWith('/admin/songs/') || path.startsWith('/masuk') || path.startsWith('/daftar')) return false;
+    return true;
+  }
+
+  function refreshCatalogView(reasonMsg) {
+    if (reasonMsg) window.musikkuToast?.(reasonMsg);
+    if (!canSafelyRefreshCatalogView()) return;
+    clearTimeout(refreshTimer);
+    refreshTimer = setTimeout(() => {
+      if (window.Turbo && typeof window.Turbo.visit === 'function') {
+        window.Turbo.visit(window.location.href, { action: 'replace' });
+      }
+    }, 350);
+  }
 
   function setStatus(text, ok) {
     rtDriverLabel = text;
@@ -114,8 +138,9 @@
           window.dispatchEvent(new CustomEvent('musikku:song-finetuned', { detail: e }));
         })
         .listen('.catalog.updated', (e) => {
-          const prefix = e.type === 'label' ? '🏷️ Label Musik Baru' : 'Daftar lagu diperbarui';
-          window.musikkuToast?.(`${prefix}: ${e.title}`);
+          const prefix = e.type === 'label' ? '🏷️ Label Musik Baru' : '🎵 Daftar lagu diperbarui';
+          currentVersion += 1;
+          refreshCatalogView(`${prefix}: ${e.title}`);
         });
 
       // 2. Registered User Channels (Presence + Private Notifications)
@@ -167,6 +192,26 @@
       setStatus('WS Standby', false);
     }
   }
+
+  // Fallback auto-sync ringan agar Guest Public & User selalu melihat lagu .mp3/.mp4 & label baru otomatis
+  setInterval(async () => {
+    if (document.hidden) return;
+    try {
+      const res = await fetch(`${baseUrl()}/api/v1/live-sync`, { headers: { Accept: 'application/json' } });
+      if (!res.ok) return;
+      const data = await res.json();
+      const serverVer = Number(data.catalog_version || 1);
+      if (serverVer > currentVersion) {
+        currentVersion = serverVer;
+        document.body.dataset.catalogVersion = String(serverVer);
+        const ev = data.last_event;
+        const msg = ev?.title
+          ? (ev.action === 'created' ? `🎵 Lagu baru tersedia: ${ev.title}` : `✨ Pembaruan musik: ${ev.title}`)
+          : '✨ Daftar lagu diperbarui secara langsung';
+        refreshCatalogView(msg);
+      }
+    } catch {}
+  }, 5000);
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initEcho);

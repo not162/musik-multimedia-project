@@ -1,11 +1,15 @@
 {{-- Variabel: $song, opsional $n (nomor), $removeUrl (tombol hapus dari daftar putar) --}}
-@php $isFav = auth()->check() && in_array($song->id, auth()->user()->favoriteIds()); @endphp
+@php
+  $isFav = auth()->check() && in_array($song->id, auth()->user()->favoriteIds());
+  $fmt   = strtolower($song->media_format ?: pathinfo((string) $song->file_path, PATHINFO_EXTENSION) ?: 'mp3');
+@endphp
 <div class="song-row" data-id="{{ $song->id }}" data-src="{{ route('songs.stream', $song) }}"
      data-title="{{ $song->title }}" data-artist="{{ $song->artist->name }}"
      data-genre="{{ $song->genre?->name ?? '' }}" data-label="{{ $song->recordLabel?->name ?? '' }}"
      data-ai-eq='@json($song->ai_eq_bands)' data-ai-mood="{{ $song->ai_mood ?? '' }}"
      data-ai-preamp="{{ $song->ai_preamp_db ?? 0 }}" data-ai-pitch="{{ $song->ai_pitch_rate ?? 1 }}"
      data-voice-smoothed="{{ $song->is_voice_smoothed ? '1' : '0' }}"
+     data-media-format="{{ $fmt }}"
      data-href="{{ route('songs.show', $song) }}"
      data-cover="{{ $song->art_url }}" data-grad="{{ $song->gradient }}" data-fav="{{ $isFav ? 1 : 0 }}">
   @isset($n)<span class="num">{{ $n }}</span>@endisset
@@ -16,6 +20,12 @@
       <a href="{{ route('artists.show', $song->artist) }}">{{ $song->artist->name }}</a>
       @if($song->recordLabel)
         · <a href="{{ route('labels.show', $song->recordLabel) }}">🏷️ {{ $song->recordLabel->name }}</a>
+      @endif
+      @if($fmt === 'mp4')
+        <span class="badge info" style="margin-left:4px">🎬 MP4</span>
+      @endif
+      @if($song->target_sample_rate_khz)
+        <span class="badge" style="margin-left:4px">🔊 {{ $song->target_sample_rate_khz }} kHz</span>
       @endif
       <span class="js-ai-badge" style="margin-left:4px">
         @if($song->is_voice_smoothed)

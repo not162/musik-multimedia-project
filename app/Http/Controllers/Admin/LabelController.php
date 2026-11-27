@@ -58,9 +58,7 @@ class LabelController extends Controller
         $name = $label->name;
         $label->delete();
 
-        Cache::forget('home:labels');
-        Cache::forget('seo:sitemap:xml');
-        SafeBroadcast::dispatch(new CatalogUpdatedEvent('deleted', 'label', $id, $name));
+        \App\Services\CatalogSyncService::bump('deleted', 'label', $id, $name);
 
         return back()->with('ok', 'Label musik dihapus.');
     }
@@ -93,8 +91,6 @@ class LabelController extends Controller
 
     private function syncBroadcast(string $action, RecordLabel $label): void
     {
-        Cache::forget('home:labels');
-        Cache::forget('seo:sitemap:xml');
-        SafeBroadcast::dispatch(new CatalogUpdatedEvent($action, 'label', $label->id, $label->name));
+        \App\Services\CatalogSyncService::bump($action, 'label', $label->id, $label->name);
     }
 }

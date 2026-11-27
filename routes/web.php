@@ -26,6 +26,7 @@ Route::get('/chart', [HomeController::class, 'charts'])->name('charts');
 Route::get('/lagu', [SongController::class, 'index'])->name('songs.index');
 Route::get('/lagu/{song}', [SongController::class, 'show'])->name('songs.show');
 Route::get('/lagu/{song}/stream', [SongController::class, 'stream'])->name('songs.stream');
+Route::get('/lagu/{song}/hires', [SongController::class, 'downloadHires'])->name('songs.hires');
 Route::post('/lagu/{song}/played', [SongController::class, 'played'])->middleware('throttle:60,1')->name('songs.played');
 
 Route::get('/artis/{artist}', [ArtistController::class, 'show'])->name('artists.show');

@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers\Admin;
 
-use App\Events\{CatalogUpdatedEvent, SongFinetunedEvent};
+use App\Events\SongFinetunedEvent;
 use App\Http\Controllers\Controller;
 use App\Models\{AiTrainingRun, ApiEndpointRule, AudioTrainingSample, AuditLog, RecordLabel, Song};
-use App\Services\{AiMusicService, AudioTrainingService};
+use App\Services\{AiMusicService, AudioTrainingService, CatalogSyncService};
 use App\Support\SafeBroadcast;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -45,9 +45,11 @@ class AiStudioController extends Controller
     public function saveProvider(Request $request, AiMusicService $ai)
     {
         $data = $request->validate([
-            'provider'               => 'required|in:gemini,openai,custom',
+            'provider'               => 'required|in:gemini,openai,nvidia,custom',
             'model'                  => 'required|string|max:100',
             'base_url'               => 'nullable|url|max:255',
+            'compute_name'           => 'nullable|string|max:120',
+            'compute_key'            => 'nullable|string|max:300',
             'api_key'                => 'nullable|string|max:300',
             'auto_finetune_realtime' => 'boolean',
             'is_active'              => 'boolean',
@@ -57,7 +59,8 @@ class AiStudioController extends Controller
         $setting->fill([
             'provider'               => $data['provider'],
             'model'                  => $data['model'],
-            'base_url'               => $data['base_url'] ?? null,
+            'base_url'               => $data['base_url'] ?? ($data['provider'] === 'nvidia' ? 'https://integrate.api.nvidia.com/v1' : null),
+            'compute_name'           => $data['compute_name'] ?? $setting->compute_name,
             'auto_finetune_realtime' => $request->boolean('auto_finetune_realtime'),
             'is_active'              => $request->boolean('is_active'),
             'updated_by'             => auth()->id(),
@@ -66,12 +69,15 @@ class AiStudioController extends Controller
         if (! empty($data['api_key'])) {
             $setting->setPlainApiKey($data['api_key']);
         }
+        if (! empty($data['compute_key'])) {
+            $setting->setPlainComputeKey($data['compute_key']);
+        }
         $setting->save();
 
         AuditLog::record('ai_config_updated', 'AiProviderSetting', $setting->id,
             description: "Pengaturan AI {$setting->provider} ({$setting->model}) disimpan dengan aman.");
 
-        return back()->with('ok', 'Pengaturan kunci AI berhasil disimpan dengan aman.');
+        return back()->with('ok', 'Pengaturan model AI, compute, & kunci akses berhasil disimpan dengan aman.');
     }
 
     public function testProvider(AiMusicService $ai)
@@ -156,16 +162,19 @@ class AiStudioController extends Controller
     public function polishSong(Request $request, Song $song, AudioTrainingService $trainer)
     {
         $data = $request->validate([
-            'preset_key'      => 'nullable|string|in:halus_jernih,vokal_lembut,hangat_alami,bersih_seimbang,nyaman_fokus',
-            'noise_strength'  => 'nullable|in:light,medium,strong',
-            'custom_prompt'   => 'nullable|string|max:400',
-            'render_audio'    => 'nullable|boolean',
-            'record_label_id' => 'nullable|exists:record_labels,id',
+            'preset_key'             => 'nullable|string|in:halus_jernih,vokal_lembut,hangat_alami,bersih_seimbang,nyaman_fokus',
+            'noise_strength'         => 'nullable|in:light,medium,strong',
+            'target_sample_rate_khz' => 'nullable|integer|min:100|max:1100',
+            'custom_prompt'          => 'nullable|string|max:400',
+            'render_audio'           => 'nullable|boolean',
+            'record_label_id'        => 'nullable|exists:record_labels,id',
         ]);
 
         if (! empty($data['record_label_id'])) {
             $song->update(['record_label_id' => $data['record_label_id']]);
         }
+
+        $targetKhz = $request->filled('target_sample_rate_khz') ? (int) $data['target_sample_rate_khz'] : null;
 
         $res = $trainer->polishSongVoice(
             $song,
@@ -173,34 +182,42 @@ class AiStudioController extends Controller
             $data['noise_strength'] ?? 'medium',
             (string) ($data['custom_prompt'] ?? ''),
             $request->boolean('render_audio', true),
-            auth()->id()
+            auth()->id(),
+            $targetKhz
         );
 
         AuditLog::record('ai_voice_polished', 'Song', $song->id,
             newValues: [
                 'clarity'    => "{$res['before_clarity']}->{$res['after_clarity']}",
                 'smoothness' => "{$res['before_smoothness']}->{$res['after_smoothness']}",
+                'freq_khz'   => $targetKhz,
                 'rendered'   => $res['rendered_audio'],
             ],
             description: "Melatih suara '{$song->title}' agar lebih halus dan jernih.");
 
-        Cache::forget('home:stats');
         SafeBroadcast::dispatch(new SongFinetunedEvent($res['song'], $res['source']));
-        SafeBroadcast::dispatch(new CatalogUpdatedEvent('finetuned', 'song', $song->id, $song->title));
+        CatalogSyncService::bump('finetuned', 'song', $song->id, $song->title, [
+            'format'        => $res['song']->media_format,
+            'frequency_khz' => $res['song']->target_sample_rate_khz,
+        ]);
 
-        return back()->with('ok', "Suara \"{$song->title}\" berhasil dilatih menjadi lebih halus & jernih! Kejernihan: {$res['before_clarity']} → {$res['after_clarity']}/100 · Kehalusan: {$res['before_smoothness']} → {$res['after_smoothness']}/100.");
+        $freqNote = $targetKhz ? " · Arsip master {$targetKhz} kHz siap" : '';
+        return back()->with('ok', "Suara \"{$song->title}\" berhasil dilatih menjadi lebih halus & jernih! Kejernihan: {$res['before_clarity']} → {$res['after_clarity']}/100 · Kehalusan: {$res['before_smoothness']} → {$res['after_smoothness']}/100{$freqNote}.");
     }
 
     public function polishAll(Request $request, AudioTrainingService $trainer)
     {
-        $preset = $request->input('preset_key', 'halus_jernih');
-        $songs  = Song::orderBy('id')->get();
+        $preset    = $request->input('preset_key', 'halus_jernih');
+        $targetKhz = $request->filled('target_sample_rate_khz') ? max(100, min(1100, (int) $request->input('target_sample_rate_khz'))) : null;
+        $songs     = Song::orderBy('id')->get();
         foreach ($songs as $song) {
-            $res = $trainer->polishSongVoice($song, $preset, 'medium', '', true, auth()->id());
+            $res = $trainer->polishSongVoice($song, $preset, 'medium', '', true, auth()->id(), $targetKhz);
             SafeBroadcast::dispatch(new SongFinetunedEvent($res['song'], $res['source']));
         }
 
-        Cache::forget('home:stats');
+        if ($songs->first()) {
+            CatalogSyncService::bump('finetuned', 'song', $songs->first()->id, 'Seluruh Katalog');
+        }
         AuditLog::record('ai_voice_polished_all', 'Song', null, description: "Melatih & menghaluskan {$songs->count()} lagu sekaligus.");
 
         return back()->with('ok', "Seluruh {$songs->count()} lagu berhasil dilatih agar lebih halus, jernih, dan bebas bising serta langsung diperbarui ke semua pendengar.");
@@ -226,9 +243,8 @@ class AiStudioController extends Controller
             newValues: ['source' => $res['source'], 'direction' => $res['song']->ai_direction, 'mood' => $res['song']->ai_mood],
             description: "Penyesuaian suara AI untuk '{$song->title}'");
 
-        Cache::forget('home:stats');
         SafeBroadcast::dispatch(new SongFinetunedEvent($res['song'], $res['source']));
-        SafeBroadcast::dispatch(new CatalogUpdatedEvent('finetuned', 'song', $song->id, $song->title));
+        CatalogSyncService::bump('finetuned', 'song', $song->id, $song->title);
 
         $msg = $res['source'] === 'ai_api'
             ? "Suara lagu \"{$song->title}\" berhasil disesuaikan oleh model AI dan langsung diperbarui ke semua pengguna!"
@@ -275,6 +291,7 @@ class AiStudioController extends Controller
 
         AuditLog::record('manual_finetune_song', 'Song', $song->id, description: "Penyesuaian suara manual: {$song->title}");
         SafeBroadcast::dispatch(new SongFinetunedEvent($song->fresh(), 'admin_dsp'));
+        CatalogSyncService::bump('updated', 'song', $song->id, $song->title);
 
         return back()->with('ok', "Setelan suara \"{$song->title}\" disimpan & langsung berlaku{$extra}");
     }

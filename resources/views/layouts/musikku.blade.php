@@ -69,6 +69,7 @@
 <script src="{{ asset('js/player.js') }}?v={{ filemtime(public_path('js/player.js')) }}" defer></script>
 </head>
 <body data-base="{{ url('/') }}"
+      data-catalog-version="{{ \App\Services\CatalogSyncService::version() }}"
       @auth data-auth="1" data-eq="{{ auth()->user()->preferences['eq_preset'] ?? 'normal' }}" data-prefs='@json(auth()->user()->preferences ?? [])' @endauth>
 <div class="app">
   <aside class="side">

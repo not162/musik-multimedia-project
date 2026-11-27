@@ -19,9 +19,12 @@
     <p class="mut" style="font-size:13px">Masukkan kunci akses AI (seperti Google Gemini atau OpenAI) agar sistem bisa membantu menilai dan menghaluskan suara lagu. Kunci disimpan aman dan tersembunyi.</p>
     <div style="margin-bottom:10px">
       @if($setting->hasApiKey())
-        <span class="badge ok">✓ Kunci AI Terpasang ({{ $setting->key_hint ?? 'Tersimpan' }})</span>
+        <span class="badge ok">✓ Kunci AI Terpasang ({{ $setting->key_hint ?? 'ENV Lokal' }})</span>
       @else
         <span class="badge warn">○ Kunci AI Belum Diisi (Memakai Pelatih Suara Bawaan)</span>
+      @endif
+      @if($setting->compute_name || $setting->hasComputeKey())
+        <span class="badge info">💻 Compute: {{ $setting->compute_name ?: 'Tersimpan' }}{{ $setting->hasComputeKey() ? ' (' . ($setting->compute_key_hint ?? 'Aktif') . ')' : '' }}</span>
       @endif
       @if($setting->last_status)
         <span class="badge">{{ $setting->last_status }}</span>
@@ -33,16 +36,25 @@
         <label>Layanan AI
           <select name="provider">
             <option value="gemini" @selected($setting->provider === 'gemini')>Google Gemini</option>
+            <option value="nvidia" @selected($setting->provider === 'nvidia')>NVIDIA AI (NIM / Riva)</option>
             <option value="openai" @selected($setting->provider === 'openai')>OpenAI (ChatGPT)</option>
             <option value="custom" @selected($setting->provider === 'custom')>Layanan AI Lainnya</option>
           </select>
         </label>
         <label>Nama Model AI <input name="model" value="{{ $setting->model }}" required></label>
       </div>
-      <label>Alamat Layanan Khusus (kosongkan jika standar) <input name="base_url" value="{{ $setting->base_url }}" placeholder="https://api.openai.com/v1"></label>
-      <label>Kunci Rahasia AI (kosongkan jika tidak ingin mengganti)
-        <input type="password" name="api_key" placeholder="Tempel kunci AI di sini…" autocomplete="new-password">
-      </label>
+      <div class="row2">
+        <label>Nama Compute AI (opsional) <input name="compute_name" value="{{ $setting->compute_name }}" placeholder="Mis. constant-aquamarine-meerkat"></label>
+        <label>Alamat Layanan Khusus (opsional) <input name="base_url" value="{{ $setting->base_url }}" placeholder="https://integrate.api.nvidia.com/v1"></label>
+      </div>
+      <div class="row2">
+        <label>Kunci Rahasia AI (kosongkan jika tidak diganti)
+          <input type="password" name="api_key" placeholder="Tempel kunci AI di sini…" autocomplete="new-password">
+        </label>
+        <label>Kunci Rahasia Compute (kosongkan jika tidak diganti)
+          <input type="password" name="compute_key" placeholder="Tempel kunci compute di sini…" autocomplete="new-password">
+        </label>
+      </div>
       <label class="inline"><input type="checkbox" name="auto_finetune_realtime" value="1" @checked($setting->auto_finetune_realtime)> Otomatis haluskan &amp; jernihkan suara setiap ada lagu baru diunggah</label>
       <label class="inline"><input type="checkbox" name="is_active" value="1" @checked($setting->is_active)> Gunakan bantuan Model AI internet saat melatih lagu</label>
       <div class="actions">
@@ -233,12 +245,13 @@
       <h3 style="margin:0 0 4px">🪄 Langkah 4 · Latih Suara Agar Lebih Halus dan Jernih</h3>
       <p class="mut" style="font-size:13px;margin:0">Terapkan hasil belajar model AI ke file lagu untuk mengurangi bising/desis, melembutkan vokal yang tajam, dan meratakan volume secara otomatis ke halaman pengguna dan publik.</p>
     </div>
-    <form method="POST" action="{{ route('admin.ai.polishAll') }}" class="actions" style="margin:0">@csrf
+    <form method="POST" action="{{ route('admin.ai.polishAll') }}" class="actions" style="margin:0;flex-wrap:wrap">@csrf
       <select name="preset_key" style="width:auto;padding:6px 10px">
         @foreach($presets as $key => $p)
           <option value="{{ $key }}">{{ $p['label'] }}</option>
         @endforeach
       </select>
+      <input type="number" name="target_sample_rate_khz" min="100" max="1100" step="10" placeholder="Master 100–1100 kHz" style="width:165px;padding:6px 10px" title="Kosongkan untuk standar 48 kHz, atau isi 100–1100 kHz">
       <button class="btn sm">🪄 Latih &amp; Haluskan Semua Lagu</button>
     </form>
   </div>
@@ -249,8 +262,12 @@
         <div>
           <b style="font-size:16px">{{ $song->title }}</b>
           <span class="mut"> — {{ $song->artist?->name }}</span>
+          <span class="badge">{{ strtoupper($song->media_format ?: pathinfo((string)$song->file_path, PATHINFO_EXTENSION) ?: 'MP3') }}</span>
           @if($song->genre)<span class="badge">{{ $song->genre->name }}</span>@endif
           @if($song->recordLabel)<span class="badge info">🏷️ {{ $song->recordLabel->name }}</span>@endif
+          @if($song->target_sample_rate_khz)
+            <span class="badge info">🔊 {{ $song->target_sample_rate_khz }} kHz</span>
+          @endif
           @if($song->is_voice_smoothed)
             <span class="badge ok">✨ Suara Halus &amp; Jernih · Kejernihan {{ $song->voice_clarity_score }}/100 · Kehalusan {{ $song->voice_smoothness_score }}/100</span>
           @elseif($song->is_ai_finetuned)
@@ -260,6 +277,9 @@
           @endif
           @if($song->ai_mastering_notes)
             <div class="mut" style="font-size:13px;margin-top:5px">💬 {{ $song->ai_mastering_notes }}</div>
+          @endif
+          @if($song->hires_file_path)
+            <div style="margin-top:4px"><a class="btn ghost sm" href="{{ route('songs.hires', $song) }}" data-turbo="false">⬇ Unduh Master {{ $song->target_sample_rate_khz }} kHz (.WAV)</a></div>
           @endif
         </div>
 
@@ -274,7 +294,8 @@
             <option value="medium" selected>Peredam Bising: Sedang</option>
             <option value="strong">Peredam Bising: Kuat</option>
           </select>
-          <input name="custom_prompt" placeholder="Keinginan Anda (mis. suara vokal lebih lembut & bersih)" style="width:240px;padding:6px 10px">
+          <input type="number" name="target_sample_rate_khz" min="100" max="1100" step="10" value="{{ $song->target_sample_rate_khz }}" placeholder="100–1100 kHz" style="width:130px;padding:6px 10px" title="Opsional: ekspor arsip WAV 100–1100 kHz">
+          <input name="custom_prompt" placeholder="Keinginan Anda (mis. suara vokal lebih lembut & bersih)" style="width:220px;padding:6px 10px">
           <input type="hidden" name="render_audio" value="1">
           <button class="btn sm">🪄 Latih Suara Halus &amp; Jernih</button>
         </form>

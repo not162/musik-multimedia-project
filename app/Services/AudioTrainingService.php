@@ -347,7 +347,7 @@ class AudioTrainingService
     }
 
     /**
-     * Langkah 4: Latih & Haluskan Suara Lagu Agar Lebih Halus dan Jernih (AI + FFmpeg nyata).
+     * Langkah 4: Latih & Haluskan Suara Lagu Agar Lebih Halus dan Jernih (AI + FFmpeg nyata, support MP3/MP4 & 100-1100 kHz).
      */
     public function polishSongVoice(
         Song $song,
@@ -356,10 +356,12 @@ class AudioTrainingService
         string $customPrompt = '',
         bool $renderAudio = true,
         ?int $userId = null,
+        ?int $targetKhz = null,
     ): array {
         $song->loadMissing(['artist', 'genre', 'recordLabel']);
         $before = $this->extractAcousticFeatures($song);
         $preset = self::VOICE_PRESETS[$presetKey] ?? self::VOICE_PRESETS['halus_jernih'];
+        $khz    = ($targetKhz !== null && $targetKhz >= 100 && $targetKhz <= 1100) ? $targetKhz : null;
 
         $run = AiTrainingRun::latest()->first();
         $modelBands = null;
@@ -412,34 +414,57 @@ class AudioTrainingService
 
         $rendered = false;
         $renderMsg = 'Profil penyesuaian suara diperbarui.';
+        $hiresRel = $song->hires_file_path;
         if ($renderAudio) {
-            $ff = $this->renderSmoothClearAudio($song, $bands, $preampDb, $noiseDb);
+            $ff = $this->renderSmoothClearAudio($song, $bands, $preampDb, $noiseDb, $khz);
             $rendered  = $ff['ok'];
             $renderMsg = $ff['message'];
+            if (! empty($ff['hires_file_path'])) {
+                $hiresRel = $ff['hires_file_path'];
+            }
+        } elseif ($khz) {
+            $srcNow = storage_path('app/public/' . $song->file_path);
+            $hi = $this->renderHiresFrequencyMaster($song, $srcNow, $khz);
+            if ($hi['ok']) {
+                $hiresRel = $hi['path'];
+            }
         }
 
-        $after = $this->extractAcousticFeatures($song->fresh());
+        if ($khz) {
+            $plainNotes = rtrim($plainNotes, '.') . ". Arsip master resolusi {$khz} kHz telah dibuat, sementara pemutar web memutar versi halus 48 kHz agar lancar di semua perangkat.";
+        }
+
+        $freshSong = $song->fresh();
+        $after = $this->extractAcousticFeatures($freshSong);
         $clarityAfter    = max((int) $before['clarity_score'] + ($rendered ? 11 : 6), (int) $after['clarity_score'], 86);
         $smoothnessAfter = max((int) $before['smoothness_score'] + ($rendered ? 12 : 6), (int) $after['smoothness_score'], 88);
+        $ext = strtolower(pathinfo((string) $freshSong->file_path, PATHINFO_EXTENSION)) ?: 'mp3';
 
-        $song->fresh()->update([
+        $freshSong->update([
+            'media_format'           => $ext,
             'is_ai_finetuned'        => true,
             'is_voice_smoothed'      => true,
             'voice_preset'           => $presetKey,
             'voice_clarity_score'    => min(99, $clarityAfter),
             'voice_smoothness_score' => min(99, $smoothnessAfter),
             'noise_reduction_db'     => $noiseDb,
+            'target_sample_rate_khz' => $khz ?? $freshSong->target_sample_rate_khz,
+            'hires_file_path'        => $hiresRel,
             'ai_mood'                => $preset['label'],
             'ai_direction'           => $preset['direction'],
             'ai_eq_bands'            => $bands,
             'ai_preamp_db'           => $preampDb,
             'ai_pitch_rate'          => 1.0,
-            'ai_tempo_bpm'           => $song->ai_tempo_bpm ?: 104,
+            'ai_tempo_bpm'           => $freshSong->ai_tempo_bpm ?: 104,
             'ai_mastering_notes'     => $plainNotes,
             'ai_finetuned_at'        => now(),
-            'audio_meta'             => array_merge($after, ['voice_smoothed' => true, 'noise_reduction_db' => $noiseDb]),
-            'labeled_by'             => $song->labeled_by ?: $userId,
-            'labeled_at'             => $song->labeled_at ?: now(),
+            'audio_meta'             => array_merge($after, [
+                'voice_smoothed'         => true,
+                'noise_reduction_db'     => $noiseDb,
+                'target_sample_rate_khz' => $khz ?? $freshSong->target_sample_rate_khz,
+            ]),
+            'labeled_by' => $freshSong->labeled_by ?: $userId,
+            'labeled_at' => $freshSong->labeled_at ?: now(),
         ]);
 
         return [
@@ -451,13 +476,14 @@ class AudioTrainingService
             'after_clarity'     => min(99, $clarityAfter),
             'before_smoothness' => $before['smoothness_score'],
             'after_smoothness'  => min(99, $smoothnessAfter),
+            'hires_khz'         => $khz,
         ];
     }
 
     /**
-     * Render audio fisik menjadi lebih halus, minim noise/desis, lembut vokalnya, dan jernih.
+     * Render file fisik (.mp3 / .mp4 / lainnya) menjadi lebih halus, minim noise/desis, lembut vokalnya, dan jernih.
      */
-    public function renderSmoothClearAudio(Song $song, array $bands, float $preampDb, float $noiseReductionDb): array
+    public function renderSmoothClearAudio(Song $song, array $bands, float $preampDb, float $noiseReductionDb, ?int $targetKhz = null): array
     {
         $ffmpeg = $this->ai->findFfmpeg();
         if (! $ffmpeg) {
@@ -477,6 +503,7 @@ class AudioTrainingService
             @copy($src, $origCopy);
         }
 
+        $meta = $this->ai->probeAudio($song);
         $ext = strtolower(pathinfo($src, PATHINFO_EXTENSION)) ?: 'mp3';
         $tmpName = 'halus_' . $song->id . '_' . time() . '.' . $ext;
         $tmp = storage_path('app/public/songs/' . $tmpName);
@@ -499,7 +526,14 @@ class AudioTrainingService
         $filters[] = 'acompressor=threshold=-16dB:ratio=2.2:attack=12:release=140:makeup=1.2';
         $filters[] = 'loudnorm=I=-14:TP=-1.5:LRA=11';
 
-        $codecArgs = $ext === 'mp3' ? '-c:a libmp3lame -b:a 192k' : '';
+        $codecArgs = match ($ext) {
+            'mp4' => ($meta['has_video'] ?? false)
+                ? '-c:v copy -c:a aac -b:a 192k -ar 48000 -movflags +faststart'
+                : '-vn -c:a aac -b:a 192k -ar 48000 -movflags +faststart',
+            'mp3' => '-vn -c:a libmp3lame -b:a 192k -ar 48000',
+            default => '',
+        };
+
         $cmd = sprintf(
             '"%s" -y -i %s -af %s %s %s 2>&1',
             $ffmpeg,
@@ -515,14 +549,68 @@ class AudioTrainingService
             return ['ok' => false, 'message' => 'Pengolahan file audio belum berhasil, tetapi setelan halus web tetap aktif.'];
         }
 
+        // Jika admin meminta arsip resolusi tinggi 100 - 1.100 kHz, bangun WAV master dari hasil yang sudah halus
+        $hiresRel = null;
+        if ($targetKhz !== null && $targetKhz >= 100 && $targetKhz <= 1100) {
+            $hi = $this->renderHiresFrequencyMaster($song, $tmp, $targetKhz);
+            if ($hi['ok']) {
+                $hiresRel = $hi['path'];
+            }
+        }
+
         // Hapus render lama sementara saja; file bawaan asli tetap aman di originals/
         if (str_starts_with(basename($src), 'halus_') || str_starts_with(basename($src), 'master_')) {
             @unlink($src);
         }
 
-        $song->update(['file_path' => 'songs/' . $tmpName]);
+        $song->update(['file_path' => 'songs/' . $tmpName, 'media_format' => $ext]);
 
-        return ['ok' => true, 'message' => 'File audio berhasil dilatih ulang menjadi lebih halus, bersih dari bising, dan jernih.'];
+        return [
+            'ok'              => true,
+            'hires_file_path' => $hiresRel,
+            'message'         => 'File audio berhasil dilatih ulang menjadi lebih halus, bersih dari bising, dan jernih.',
+        ];
+    }
+
+    /**
+     * Ekspor master arsip PCM WAV pada frekuensi sampling 100 kHz - 1.100 kHz via FFmpeg.
+     */
+    public function renderHiresFrequencyMaster(Song $song, string $sourceAbsPath, int $targetKhz): array
+    {
+        $ffmpeg = $this->ai->findFfmpeg();
+        if (! $ffmpeg || ! file_exists($sourceAbsPath)) {
+            return ['ok' => false, 'path' => null];
+        }
+
+        $targetKhz = max(100, min(1100, $targetKhz));
+        $hz = $targetKhz * 1000;
+
+        $hiresDir = storage_path('app/public/songs/hires');
+        File::ensureDirectoryExists($hiresDir);
+        foreach (glob($hiresDir . DIRECTORY_SEPARATOR . "hires_song_{$song->id}_*.wav") ?: [] as $old) {
+            @unlink($old);
+        }
+
+        $filename = "hires_song_{$song->id}_{$targetKhz}khz.wav";
+        $dest = $hiresDir . DIRECTORY_SEPARATOR . $filename;
+        $channels = $targetKhz > 384 ? '-ac 1' : '-ac 2';
+
+        $cmd = sprintf(
+            '"%s" -y -i %s -vn %s -ar %d -c:a pcm_s16le %s 2>&1',
+            $ffmpeg,
+            escapeshellarg($sourceAbsPath),
+            $channels,
+            $hz,
+            escapeshellarg($dest)
+        );
+        @exec($cmd, $out, $code);
+
+        if ($code !== 0 || ! file_exists($dest) || filesize($dest) < 2048) {
+            @unlink($dest);
+            return ['ok' => false, 'path' => null];
+        }
+
+        return ['ok' => true, 'path' => 'songs/hires/' . $filename];
     }
 
     // ── Pembantu Matematika Regresi & AI ────────────────────────────────

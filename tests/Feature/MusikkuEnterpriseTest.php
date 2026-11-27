@@ -2,9 +2,10 @@
 
 namespace Tests\Feature;
 
-use App\Models\{AiProviderSetting, ApiEndpointRule, RecordLabel, Song, User};
+use App\Models\{AiProviderSetting, ApiEndpointRule, Artist, RecordLabel, Song, User};
 use Illuminate\Foundation\Testing\TestCase;
-use Illuminate\Support\Facades\Hash;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\{Hash, Storage};
 
 class MusikkuEnterpriseTest extends TestCase
 {
@@ -105,17 +106,30 @@ class MusikkuEnterpriseTest extends TestCase
         $admin = User::where('email', 'admin@musikku.test')->firstOrFail();
         $token = $admin->createToken('test-admin', ['admin', 'user'])->plainTextToken;
 
-        // 1. Save encrypted AI key without exposing raw key in response
+        // 1. Save encrypted AI & Compute key without exposing raw keys in response (preserving existing config)
+        $origSetting = AiProviderSetting::first()?->only([
+            'provider', 'model', 'base_url', 'compute_name', 'compute_key_encrypted',
+            'compute_key_hint', 'api_key_encrypted', 'key_hint', 'auto_finetune_realtime', 'is_active',
+        ]);
+
         $this->withToken($token)->postJson('/api/v1/admin/ai/provider', [
-            'provider'               => 'gemini',
-            'model'                  => 'gemini-2.5-flash',
+            'provider'               => 'nvidia',
+            'model'                  => 'nvidia/riva-translate-4b-instruct-v2',
+            'base_url'               => 'https://integrate.api.nvidia.com/v1',
+            'compute_name'           => 'constant-aquamarine-meerkat',
+            'compute_key'            => 'test_compute_secret_123456',
             'api_key'                => 'test_secret_ai_key_987654321',
             'auto_finetune_realtime' => true,
-            'is_active'              => false, // keep false during offline test so heuristic runs cleanly
-        ])->assertStatus(200)->assertJson(['has_key' => true])->assertDontSee('test_secret_ai_key_987654321');
+            'is_active'              => false,
+        ])->assertStatus(200)
+            ->assertJson(['has_key' => true])
+            ->assertDontSee('test_secret_ai_key_987654321')
+            ->assertDontSee('test_compute_secret_123456');
 
-        // Clean test AI key back out
-        AiProviderSetting::query()->update(['api_key_encrypted' => null, 'key_hint' => null, 'is_active' => true]);
+        // Keep original AI configuration intact
+        if ($origSetting) {
+            AiProviderSetting::query()->update($origSetting);
+        }
 
         // 2. Run AI Fine-Tuning on first song -> verify public AI profile updates
         $song = Song::firstOrFail();
@@ -183,6 +197,50 @@ class MusikkuEnterpriseTest extends TestCase
         $this->getJson("/api/v1/songs/{$song->id}/ai-profile")
             ->assertStatus(200)
             ->assertJsonPath('is_voice_smoothed', true);
+
+        // 6. Verify MP4 upload + 100-1100 kHz master creation + Live Sync for Guest Public & User views
+        $syncBefore = $this->getJson('/api/v1/live-sync')->assertStatus(200)->json('catalog_version');
+        $tmpMp4 = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'phpunit_test_song.mp4';
+        $ffmpeg = 'C:\\ProgramData\\chocolatey\\bin\\ffmpeg.exe';
+        if (file_exists($ffmpeg)) {
+            @exec(sprintf('"%s" -y -f lavfi -i "sine=frequency=440:duration=1" -c:a aac -b:a 128k %s 2>&1', $ffmpeg, escapeshellarg($tmpMp4)));
+        }
+        if (file_exists($tmpMp4)) {
+            $artist = Artist::firstOrFail();
+            $mp4Upload = new UploadedFile($tmpMp4, 'test-musik-baru.mp4', 'video/mp4', null, true);
+
+            $createRes = $this->withToken($token)->post('/api/v1/admin/songs', [
+                'title'                  => 'Lagu MP4 Uji 500kHz',
+                'artist_id'              => $artist->id,
+                'target_sample_rate_khz' => 500,
+                'audio'                  => $mp4Upload,
+            ], ['Accept' => 'application/json']);
+
+            $createRes->assertStatus(201)
+                ->assertJsonPath('song.media_format', 'mp4')
+                ->assertJsonPath('song.target_sample_rate_khz', 500);
+
+            $newId = $createRes->json('song.id');
+            $createdSong = Song::findOrFail($newId);
+            $this->assertNotEmpty($createdSong->hires_file_path);
+            $this->assertTrue(Storage::disk('public')->exists($createdSong->hires_file_path));
+
+            // Guest Public & User views auto-sync + MP4/Hi-Res routes
+            $syncAfter = $this->getJson('/api/v1/live-sync')->assertStatus(200);
+            $this->assertGreaterThan($syncBefore, $syncAfter->json('catalog_version'));
+            $this->get('/')->assertStatus(200)->assertSee('Lagu MP4 Uji 500kHz');
+            $this->get("/lagu/{$newId}")->assertStatus(200)->assertSee('500 kHz')->assertSee('video');
+            $this->get("/lagu/{$newId}/stream")->assertStatus(200);
+            $this->get("/lagu/{$newId}/hires")->assertStatus(200);
+
+            $demoUser = User::where('email', 'user@musikku.test')->firstOrFail();
+            $this->actingAs($demoUser)->get('/lagu')->assertStatus(200)->assertSee('Lagu MP4 Uji 500kHz');
+            $this->app['auth']->forgetGuards();
+
+            // Clean up temporary MP4 test song using admin Bearer token
+            $this->withToken($token)->deleteJson("/api/v1/admin/songs/{$newId}")->assertStatus(200);
+            @unlink($tmpMp4);
+        }
 
         $admin->tokens()->where('name', 'test-admin')->delete();
     }

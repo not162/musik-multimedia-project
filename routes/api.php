@@ -24,6 +24,11 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         }
     })->name('health');
 
+    // Live sync state for Guest Public & User auto-refresh
+    Route::get('live-sync', [V1\SongController::class, 'liveSync'])
+        ->middleware('throttle:api-public')
+        ->name('live-sync');
+
     // ── Auth (Guest) ─────────────────────────────────────────────────
     Route::post('register', [V1\AuthController::class, 'register'])
         ->middleware('throttle:api-auth')

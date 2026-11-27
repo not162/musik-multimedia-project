@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers\Api\V1\Admin;
 
-use App\Events\{CatalogUpdatedEvent, SongFinetunedEvent};
+use App\Events\SongFinetunedEvent;
 use App\Http\Controllers\Controller;
 use App\Models\{AiTrainingRun, ApiEndpointRule, AudioTrainingSample, AuditLog, Song};
-use App\Services\{AiMusicService, AudioTrainingService};
+use App\Services\{AiMusicService, AudioTrainingService, CatalogSyncService};
 use App\Support\SafeBroadcast;
 use Illuminate\Http\{JsonResponse, Request};
 use Illuminate\Support\Facades\Cache;
@@ -20,8 +20,11 @@ class AiStudioController extends Controller
             'provider'               => $setting->provider,
             'model'                  => $setting->model,
             'base_url'               => $setting->base_url,
+            'compute_name'           => $setting->compute_name,
             'has_api_key'            => $setting->hasApiKey(),
             'key_hint'               => $setting->key_hint,
+            'has_compute_key'        => $setting->hasComputeKey(),
+            'compute_key_hint'       => $setting->compute_key_hint,
             'auto_finetune_realtime' => $setting->auto_finetune_realtime,
             'is_active'              => $setting->is_active,
             'last_tested_at'         => $setting->last_tested_at?->toIso8601String(),
@@ -40,9 +43,11 @@ class AiStudioController extends Controller
     public function saveProvider(Request $request, AiMusicService $ai): JsonResponse
     {
         $data = $request->validate([
-            'provider'               => 'required|in:gemini,openai,custom',
+            'provider'               => 'required|in:gemini,openai,nvidia,custom',
             'model'                  => 'required|string|max:100',
             'base_url'               => 'nullable|url|max:255',
+            'compute_name'           => 'nullable|string|max:120',
+            'compute_key'            => 'nullable|string|max:300',
             'api_key'                => 'nullable|string|max:300',
             'auto_finetune_realtime' => 'boolean',
             'is_active'              => 'boolean',
@@ -52,7 +57,8 @@ class AiStudioController extends Controller
         $setting->fill([
             'provider'               => $data['provider'],
             'model'                  => $data['model'],
-            'base_url'               => $data['base_url'] ?? null,
+            'base_url'               => $data['base_url'] ?? ($data['provider'] === 'nvidia' ? 'https://integrate.api.nvidia.com/v1' : null),
+            'compute_name'           => $data['compute_name'] ?? $setting->compute_name,
             'auto_finetune_realtime' => $request->boolean('auto_finetune_realtime', $setting->auto_finetune_realtime),
             'is_active'              => $request->boolean('is_active', $setting->is_active),
             'updated_by'             => auth()->id(),
@@ -60,6 +66,9 @@ class AiStudioController extends Controller
 
         if (! empty($data['api_key'])) {
             $setting->setPlainApiKey($data['api_key']);
+        }
+        if (! empty($data['compute_key'])) {
+            $setting->setPlainComputeKey($data['compute_key']);
         }
         $setting->save();
 
@@ -133,11 +142,14 @@ class AiStudioController extends Controller
     public function polishSong(Request $request, Song $song, AudioTrainingService $trainer): JsonResponse
     {
         $data = $request->validate([
-            'preset_key'     => 'nullable|string|in:halus_jernih,vokal_lembut,hangat_alami,bersih_seimbang,nyaman_fokus',
-            'noise_strength' => 'nullable|in:light,medium,strong',
-            'custom_prompt'  => 'nullable|string|max:400',
-            'render_audio'   => 'nullable|boolean',
+            'preset_key'             => 'nullable|string|in:halus_jernih,vokal_lembut,hangat_alami,bersih_seimbang,nyaman_fokus',
+            'noise_strength'         => 'nullable|in:light,medium,strong',
+            'target_sample_rate_khz' => 'nullable|integer|min:100|max:1100',
+            'custom_prompt'          => 'nullable|string|max:400',
+            'render_audio'           => 'nullable|boolean',
         ]);
+
+        $targetKhz = $request->filled('target_sample_rate_khz') ? (int) $data['target_sample_rate_khz'] : null;
 
         $res = $trainer->polishSongVoice(
             $song,
@@ -145,17 +157,21 @@ class AiStudioController extends Controller
             $data['noise_strength'] ?? 'medium',
             (string) ($data['custom_prompt'] ?? ''),
             $request->boolean('render_audio', true),
-            auth()->id()
+            auth()->id(),
+            $targetKhz
         );
 
-        Cache::forget('home:stats');
         SafeBroadcast::dispatch(new SongFinetunedEvent($res['song'], $res['source']));
-        SafeBroadcast::dispatch(new CatalogUpdatedEvent('finetuned', 'song', $song->id, $song->title));
+        CatalogSyncService::bump('finetuned', 'song', $song->id, $song->title, [
+            'format'        => $res['song']->media_format,
+            'frequency_khz' => $res['song']->target_sample_rate_khz,
+        ]);
 
         return response()->json([
             'message'           => 'Suara lagu berhasil dilatih agar lebih halus dan jernih.',
             'source'            => $res['source'],
             'rendered_audio'    => $res['rendered_audio'],
+            'hires_khz'         => $res['hires_khz'],
             'before_clarity'    => $res['before_clarity'],
             'after_clarity'     => $res['after_clarity'],
             'before_smoothness' => $res['before_smoothness'],
@@ -179,7 +195,7 @@ class AiStudioController extends Controller
         $res = $ai->finetuneSong($song, (string) ($data['target_prompt'] ?? ''), $data['direction_hint'] ?? null);
 
         SafeBroadcast::dispatch(new SongFinetunedEvent($res['song'], $res['source']));
-        SafeBroadcast::dispatch(new CatalogUpdatedEvent('finetuned', 'song', $song->id, $song->title));
+        CatalogSyncService::bump('finetuned', 'song', $song->id, $song->title);
 
         return response()->json([
             'message' => 'Penyesuaian suara lagu selesai & langsung diperbarui.',

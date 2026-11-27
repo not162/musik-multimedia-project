@@ -12,8 +12,10 @@ class AiMusicService
     public static function currentSetting(): AiProviderSetting
     {
         return AiProviderSetting::firstOrCreate([], [
-            'provider'               => 'gemini',
-            'model'                  => 'gemini-2.5-flash',
+            'provider'               => config('services.ai.nvidia_key') ? 'nvidia' : 'gemini',
+            'model'                  => config('services.ai.nvidia_key') ? config('services.ai.nvidia_model', 'nvidia/riva-translate-4b-instruct-v2') : 'gemini-2.5-flash',
+            'base_url'               => config('services.ai.nvidia_key') ? config('services.ai.nvidia_base_url', 'https://integrate.api.nvidia.com/v1') : null,
+            'compute_name'           => config('services.ai.compute_name'),
             'auto_finetune_realtime' => true,
             'is_active'              => true,
         ]);
@@ -26,16 +28,21 @@ class AiMusicService
     {
         $apiKey = $setting->getDecryptedApiKey();
         if (! $apiKey) {
-            return ['ok' => false, 'message' => 'API AI Key belum diisi.'];
+            return ['ok' => false, 'message' => 'Kunci AI belum diisi.'];
         }
 
         try {
-            $reply = $this->callAiApi($setting, $apiKey, 'Balas hanya JSON: {"status":"ok","engine":"ready"}');
+            $isRiva = $setting->provider === 'nvidia' && str_contains((string) $setting->model, 'riva-translate');
+            if ($isRiva) {
+                $reply = $this->translateWithRiva($setting, $apiKey, 'Warm clear studio vocals.', 'en-id');
+            } else {
+                $reply = $this->callAiApi($setting, $apiKey, 'Balas hanya JSON: {"status":"ok","engine":"ready"}');
+            }
             $setting->update([
                 'last_tested_at' => now(),
                 'last_status'    => 'Terhubung (' . $setting->provider . ' / ' . $setting->model . ')',
             ]);
-            return ['ok' => true, 'message' => 'Koneksi API AI berhasil!', 'raw' => $reply];
+            return ['ok' => true, 'message' => 'Sambungan ke model AI berhasil!', 'raw' => $reply];
         } catch (\Throwable $e) {
             $setting->update([
                 'last_tested_at' => now(),
@@ -59,7 +66,7 @@ class AiMusicService
         $warning    = null;
         $parsed     = null;
 
-        if ($apiKey) {
+        if ($apiKey && ! ($setting->provider === 'nvidia' && str_contains((string) $setting->model, 'riva-translate'))) {
             try {
                 $prompt = $this->buildPrompt($song, $audioMeta, $targetPrompt, $directionHint);
                 $raw    = $this->callAiApi($setting, $apiKey, $prompt);
@@ -71,7 +78,7 @@ class AiMusicService
                 $warning = 'AI sedang menggunakan pengaturan pintar bawaan karena sambungan AI internet belum merespons: ' . $e->getMessage();
                 Log::warning('AI Finetune fallback', ['song_id' => $song->id, 'error' => $e->getMessage()]);
             }
-        } else {
+        } elseif (! $apiKey) {
             $warning = 'Kunci AI belum diisi — sistem menggunakan pengaturan pintar bawaan agar suara tetap halus dan jernih.';
         }
 
@@ -108,12 +115,14 @@ class AiMusicService
         }
 
         $meta = [
-            'exists'     => true,
-            'size_kb'    => round(filesize($path) / 1024, 1),
-            'extension'  => pathinfo($path, PATHINFO_EXTENSION),
-            'codec'      => strtoupper(pathinfo($path, PATHINFO_EXTENSION)),
-            'sample_rate' => 44100,
+            'exists'       => true,
+            'size_kb'      => round(filesize($path) / 1024, 1),
+            'extension'    => strtolower(pathinfo($path, PATHINFO_EXTENSION)),
+            'codec'        => strtoupper(pathinfo($path, PATHINFO_EXTENSION)),
+            'sample_rate'  => 44100,
             'bitrate_kbps' => null,
+            'has_video'    => false,
+            'duration_s'   => null,
         ];
 
         $ffmpeg = $this->findFfmpeg();
@@ -124,6 +133,10 @@ class AiMusicService
             if (preg_match('/(\d+)\s*Hz/', $out, $m)) $meta['sample_rate'] = (int) $m[1];
             if (preg_match('/bitrate:\s*(\d+)\s*kb\/s/', $out, $m)) $meta['bitrate_kbps'] = (int) $m[1];
             if (preg_match('/Audio:\s*([a-zA-Z0-9_]+)/', $out, $m)) $meta['codec'] = strtoupper($m[1]);
+            if (preg_match('/Stream\s+#\d+:\d+.*Video:/i', $out)) $meta['has_video'] = true;
+            if (preg_match('/Duration:\s*(\d+):(\d+):([\d\.]+)/', $out, $m)) {
+                $meta['duration_s'] = (int) round(((int) $m[1]) * 3600 + ((int) $m[2]) * 60 + ((float) $m[3]));
+            }
         }
 
         return $meta;
@@ -146,6 +159,7 @@ class AiMusicService
 
         $ext = strtolower(pathinfo($src, PATHINFO_EXTENSION)) ?: 'mp3';
         $tmp = storage_path('app/public/songs/master_' . $song->id . '_' . time() . '.' . $ext);
+        $meta = $this->probeAudio($song);
 
         $filters = [];
         if (abs($preampDb) > 0.05) {
@@ -166,11 +180,19 @@ class AiMusicService
         }
 
         $af = implode(',', $filters);
+        $codecArgs = match ($ext) {
+            'mp4' => ($meta['has_video'] ?? false)
+                ? '-c:v copy -c:a aac -b:a 192k -ar 48000 -movflags +faststart'
+                : '-vn -c:a aac -b:a 192k -ar 48000 -movflags +faststart',
+            'mp3' => '-vn -c:a libmp3lame -b:a 192k -ar 48000',
+            default => '',
+        };
         $cmd = sprintf(
-            '"%s" -y -i %s -af %s %s 2>&1',
+            '"%s" -y -i %s -af %s %s %s 2>&1',
             $ffmpeg,
             escapeshellarg($src),
             escapeshellarg($af),
+            $codecArgs,
             escapeshellarg($tmp)
         );
 
@@ -212,7 +234,7 @@ class AiMusicService
             $url   = ($setting->base_url ?: 'https://generativelanguage.googleapis.com/v1beta')
                 . "/models/{$model}:generateContent?key={$apiKey}";
 
-            $res = Http::timeout(25)->post($url, [
+            $res = Http::timeout(12)->post($url, [
                 'contents' => [['parts' => [['text' => $prompt]]]],
                 'generationConfig' => [
                     'temperature'      => 0.4,
@@ -227,12 +249,38 @@ class AiMusicService
             return (string) data_get($res->json(), 'candidates.0.content.parts.0.text', '');
         }
 
+        if ($setting->provider === 'nvidia') {
+            $endpoint = rtrim($setting->base_url ?: config('services.ai.nvidia_base_url', 'https://integrate.api.nvidia.com/v1'), '/') . '/chat/completions';
+            $model = $setting->model ?: config('services.ai.nvidia_model', 'nvidia/riva-translate-4b-instruct-v2');
+            if (str_contains($model, 'riva-translate')) {
+                return $this->translateWithRiva($setting, $apiKey, $prompt, 'en-id');
+            }
+
+            $res = Http::timeout(12)
+                ->withToken($apiKey)
+                ->post($endpoint, [
+                    'model'       => $model,
+                    'temperature' => 0.3,
+                    'max_tokens'  => 512,
+                    'messages'    => [
+                        ['role' => 'system', 'content' => 'You are an expert audio mastering engineer. Respond with valid JSON only.'],
+                        ['role' => 'user', 'content' => $prompt],
+                    ],
+                ]);
+
+            if (! $res->successful()) {
+                throw new \RuntimeException('NVIDIA NIM HTTP ' . $res->status() . ': ' . substr($res->body(), 0, 180));
+            }
+
+            return (string) data_get($res->json(), 'choices.0.message.content', '');
+        }
+
         // OpenAI or OpenAI-compatible custom endpoint
         $endpoint = $setting->base_url
             ? rtrim($setting->base_url, '/') . '/chat/completions'
             : 'https://api.openai.com/v1/chat/completions';
 
-        $res = Http::timeout(25)
+        $res = Http::timeout(12)
             ->withToken($apiKey)
             ->post($endpoint, [
                 'model'       => $setting->model ?: 'gpt-4o-mini',
@@ -245,6 +293,32 @@ class AiMusicService
 
         if (! $res->successful()) {
             throw new \RuntimeException('AI API HTTP ' . $res->status() . ': ' . substr($res->body(), 0, 180));
+        }
+
+        return (string) data_get($res->json(), 'choices.0.message.content', '');
+    }
+
+    public function translateWithRiva(AiProviderSetting $setting, string $apiKey, string $text, string $langPair = 'en-id'): string
+    {
+        $endpoint = rtrim($setting->base_url ?: config('services.ai.nvidia_base_url', 'https://integrate.api.nvidia.com/v1'), '/') . '/chat/completions';
+        $model    = str_contains((string) $setting->model, 'riva-translate')
+            ? $setting->model
+            : 'nvidia/riva-translate-4b-instruct-v2';
+
+        $res = Http::timeout(15)
+            ->withToken($apiKey)
+            ->post($endpoint, [
+                'model'       => $model,
+                'temperature' => 0.1,
+                'max_tokens'  => 400,
+                'messages'    => [
+                    ['role' => 'system', 'content' => $langPair],
+                    ['role' => 'user', 'content' => $text],
+                ],
+            ]);
+
+        if (! $res->successful()) {
+            throw new \RuntimeException('NVIDIA Riva HTTP ' . $res->status() . ': ' . substr($res->body(), 0, 180));
         }
 
         return (string) data_get($res->json(), 'choices.0.message.content', '');
@@ -276,9 +350,12 @@ class AiMusicService
      */
     public function consultJson(string $prompt): ?array
     {
+        if (app()->runningUnitTests()) {
+            return null;
+        }
         $setting = self::currentSetting();
         $apiKey  = $setting->is_active ? $setting->getDecryptedApiKey() : null;
-        if (! $apiKey) {
+        if (! $apiKey || ($setting->provider === 'nvidia' && str_contains((string) $setting->model, 'riva-translate'))) {
             return null;
         }
         try {
