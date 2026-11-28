@@ -100,6 +100,7 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
             Route::put('preferences', [V1\StudioController::class, 'updatePreferences'])->name('preferences');
             Route::post('requests', [V1\StudioController::class, 'storeRequest'])->name('requests.store');
             Route::post('import', [V1\StudioController::class, 'importSong'])->name('import');
+            Route::post('songs/{song}/upgrade-bitrate', [V1\StudioController::class, 'upgradeBitrate'])->name('songs.upgradeBitrate');
             Route::delete('songs/{song}', [V1\StudioController::class, 'destroySong'])->name('songs.destroy');
         });
     });

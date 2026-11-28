@@ -16,30 +16,35 @@ use Illuminate\Http\{JsonResponse, Request};
  */
 class StudioController extends Controller
 {
+    private function formatSong(Song $s): array
+    {
+        return [
+            'id'                 => $s->id,
+            'title'              => $s->title,
+            'artist'             => $s->artist?->name,
+            'genre'              => $s->genre?->name,
+            'label'              => $s->recordLabel?->name,
+            'media_format'       => $s->media_format ?: 'mp3',
+            'voice_bitrate_kbps' => $s->voice_bitrate_kbps,
+            'is_custom'          => $s->uploaded_by !== null,
+            'uploaded_by'        => $s->uploaded_by,
+            'duration_label'     => $s->duration_label,
+            'is_smoothed'        => (bool) $s->is_voice_smoothed,
+            'sound_style'        => $s->ai_mood ?: 'Standar',
+            'clarity_score'      => $s->voice_clarity_score,
+            'smoothness_score'   => $s->voice_smoothness_score,
+            'sound_notes'        => $s->ai_mastering_notes,
+            'eq_bands'           => $s->ai_eq_bands ?? [0,0,0,0,0,0,0,0,0,0],
+            'stream_url'         => route('songs.stream', $s),
+        ];
+    }
+
     public function index(Request $request): JsonResponse
     {
         $user  = $request->user();
         $songs = Song::with(['artist:id,name', 'genre:id,name', 'recordLabel:id,name,slug'])
             ->latest()->get()
-            ->map(fn (Song $s) => [
-                'id'                 => $s->id,
-                'title'              => $s->title,
-                'artist'             => $s->artist?->name,
-                'genre'              => $s->genre?->name,
-                'label'              => $s->recordLabel?->name,
-                'media_format'       => $s->media_format ?: 'mp3',
-                'voice_bitrate_kbps' => $s->voice_bitrate_kbps,
-                'is_custom'          => $s->uploaded_by !== null,
-                'uploaded_by'        => $s->uploaded_by,
-                'duration_label'     => $s->duration_label,
-                'is_smoothed'        => (bool) $s->is_voice_smoothed,
-                'sound_style'        => $s->ai_mood ?: 'Standar',
-                'clarity_score'      => $s->voice_clarity_score,
-                'smoothness_score'   => $s->voice_smoothness_score,
-                'sound_notes'        => $s->ai_mastering_notes,
-                'eq_bands'           => $s->ai_eq_bands ?? [0,0,0,0,0,0,0,0,0,0],
-                'stream_url'         => route('songs.stream', $s),
-            ]);
+            ->map(fn (Song $s) => $this->formatSong($s));
 
         $myRequests = StudioRequest::with('song:id,title')
             ->where('user_id', $user->id)
@@ -121,39 +126,40 @@ class StudioController extends Controller
     {
         $data = $request->validate(AudioTrainingService::customImportRules());
         $res  = $trainer->importUserCustomSong($request->user(), $request->file('audio'), $data);
-        $s    = $res['song'];
 
         return response()->json([
-            'message'        => $res['message'],
-            'bitrate_kbps'   => $res['bitrate_kbps'],
-            'rendered_audio' => $res['rendered_audio'],
-            'catalog_version'=> CatalogSyncService::version(),
-            'song'           => [
-                'id'                 => $s->id,
-                'title'              => $s->title,
-                'artist'             => $s->artist?->name,
-                'genre'              => $s->genre?->name,
-                'media_format'       => $s->media_format ?: 'mp3',
-                'voice_bitrate_kbps' => $s->voice_bitrate_kbps,
-                'is_custom'          => true,
-                'uploaded_by'        => $s->uploaded_by,
-                'duration_label'     => $s->duration_label,
-                'is_smoothed'        => (bool) $s->is_voice_smoothed,
-                'clarity_score'      => $s->voice_clarity_score,
-                'smoothness_score'   => $s->voice_smoothness_score,
-                'stream_url'         => route('songs.stream', $s),
-            ],
+            'message'         => $res['message'],
+            'bitrate_kbps'    => $res['bitrate_kbps'],
+            'rendered_audio'  => $res['rendered_audio'],
+            'catalog_version' => CatalogSyncService::version(),
+            'song'            => $this->formatSong($res['song']),
         ], 201);
+    }
+
+    public function upgradeBitrate(Request $request, Song $song, AudioTrainingService $trainer): JsonResponse
+    {
+        AudioTrainingService::authorizeCustomSong($request->user(), $song, 'meng-upgrade');
+
+        $data = $request->validate([
+            'voice_bitrate_kbps' => 'nullable|integer|min:' . AudioTrainingService::MIN_VOICE_BITRATE_KBPS . '|max:' . AudioTrainingService::MAX_VOICE_BITRATE_KBPS,
+        ]);
+
+        $target = (int) ($data['voice_bitrate_kbps'] ?? AudioTrainingService::MAX_VOICE_BITRATE_KBPS);
+        $res    = $trainer->upgradeCustomSongBitrate($request->user(), $song, $target);
+
+        return response()->json([
+            'message'         => $res['message'],
+            'from_kbps'       => $res['from_kbps'],
+            'bitrate_kbps'    => $res['bitrate_kbps'],
+            'rendered_audio'  => $res['rendered_audio'],
+            'catalog_version' => CatalogSyncService::version(),
+            'song'            => $this->formatSong($res['song']),
+        ]);
     }
 
     public function destroySong(Request $request, Song $song, AudioTrainingService $trainer): JsonResponse
     {
-        $user = $request->user();
-        abort_unless(
-            $user->isAdmin() || ($song->uploaded_by !== null && (int) $song->uploaded_by === (int) $user->id),
-            403,
-            'Anda hanya dapat menghapus lagu custom milik Anda sendiri.'
-        );
+        AudioTrainingService::authorizeCustomSong($request->user(), $song, 'menghapus');
 
         $title = $song->title;
         $trainer->deleteUserCustomSong($song);

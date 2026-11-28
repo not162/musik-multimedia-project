@@ -38,9 +38,9 @@
 @include('partials.errors')
 
 <div class="panel">
-  <h3>⬆️ Impor Lagu Custom (Pita Suara 128 – 250 kbps)</h3>
+  <h3>⬆️ Impor Lagu Custom (Pita Suara 128 – 378 kbps · Upgrade 350 → 378 kbps)</h3>
   <p class="mut" style="font-size:13px">
-    Unggah lagu pribadi Anda (.mp3, .mp4, .wav, .m4a, .ogg, .aac, .flac) lalu pilih kerapatan pita suara antara <b>128 kbps hingga 250 kbps</b> agar suara nyanyian terdengar lebih halus, bersih, dan jernih.
+    Unggah lagu pribadi Anda (.mp3, .mp4, .wav, .m4a, .ogg, .aac, .flac) dengan kerapatan pita suara <b>128 kbps hingga 378 kbps</b> (standar <b>350 kbps</b> dapat di-upgrade hingga <b>378 kbps</b> agar vokal terdengar sangat halus, jernih, dan utuh).
   </p>
   <form method="POST" action="{{ route('studio.import') }}" enctype="multipart/form-data" class="form">@csrf
     <div class="row2">
@@ -66,12 +66,19 @@
     </div>
     <div class="row2">
       <label>
-        <span>Frekuensi Pita Suara (<b>128 – 250 kbps</b>): <b id="bitrateBadge" class="badge ok">{{ old('voice_bitrate_kbps', 192) }} kbps</b></span>
+        <span>Frekuensi Pita Suara (<b>128 – 378 kbps</b>): <b id="bitrateBadge" class="badge ok">{{ old('voice_bitrate_kbps', 350) }} kbps</b></span>
         <div style="display:flex;align-items:center;gap:10px;margin-top:6px">
-          <input type="range" id="bitrateSlider" min="128" max="250" step="1" value="{{ old('voice_bitrate_kbps', 192) }}" style="flex:1">
-          <input type="number" id="bitrateNumber" name="voice_bitrate_kbps" min="128" max="250" value="{{ old('voice_bitrate_kbps', 192) }}" style="width:92px" required>
+          <input type="range" id="bitrateSlider" min="128" max="378" step="1" value="{{ old('voice_bitrate_kbps', 350) }}" style="flex:1">
+          <input type="number" id="bitrateNumber" name="voice_bitrate_kbps" min="128" max="378" value="{{ old('voice_bitrate_kbps', 350) }}" style="width:92px" required>
         </div>
-        <small class="mut" id="bitrateHint">128 kbps hemat ruang · 192 kbps halus seimbang · 250 kbps detail pita suara tertinggi.</small>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">
+          <button type="button" class="btn sm ghost js-br-preset" data-kbps="128">128 kbps</button>
+          <button type="button" class="btn sm ghost js-br-preset" data-kbps="192">192 kbps</button>
+          <button type="button" class="btn sm ghost js-br-preset" data-kbps="250">250 kbps</button>
+          <button type="button" class="btn sm ghost js-br-preset" data-kbps="350">350 kbps</button>
+          <button type="button" class="btn sm js-br-preset" data-kbps="378">⚡ Upgrade 378 kbps</button>
+        </div>
+        <small class="mut" id="bitrateHint">350 kbps studio standar · 378 kbps tingkat upgrade paling halus &amp; detail.</small>
       </label>
       <label>Karakter Kehalusan Suara
         <select name="voice_style">
@@ -207,6 +214,7 @@
     @foreach($songs as $s)
       @include('partials.song-row', [
         'song' => $s,
+        'upgradeBitrateUrl' => ($s->uploaded_by && (int) $s->uploaded_by === (int) $user->id && (int) ($s->voice_bitrate_kbps ?? 0) < 378) ? route('studio.songs.upgradeBitrate', $s) : null,
         'deleteCustomUrl' => ($s->uploaded_by && (int) $s->uploaded_by === (int) $user->id) ? route('studio.songs.destroy', $s) : null,
       ])
     @endforeach
@@ -221,13 +229,16 @@
   const badge = document.getElementById('bitrateBadge');
   if (!slider || !num || !badge) return;
   const sync = (val) => {
-    const n = Math.max(128, Math.min(250, parseInt(val || 192, 10) || 192));
+    const n = Math.max(128, Math.min(378, parseInt(val || 350, 10) || 350));
     slider.value = n;
     num.value = n;
     badge.textContent = n + ' kbps';
   };
   slider.addEventListener('input', () => sync(slider.value));
   num.addEventListener('change', () => sync(num.value));
+  document.querySelectorAll('.js-br-preset').forEach((btn) => {
+    btn.addEventListener('click', () => sync(btn.dataset.kbps));
+  });
 })();
 </script>
 @endpush

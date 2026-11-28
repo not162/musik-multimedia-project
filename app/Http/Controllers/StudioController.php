@@ -101,14 +101,23 @@ class StudioController extends Controller
         return back()->with('ok', $res['message']);
     }
 
+    public function upgradeBitrate(Request $request, Song $song, AudioTrainingService $trainer)
+    {
+        AudioTrainingService::authorizeCustomSong($request->user(), $song, 'meng-upgrade');
+
+        $data = $request->validate([
+            'voice_bitrate_kbps' => 'nullable|integer|min:' . AudioTrainingService::MIN_VOICE_BITRATE_KBPS . '|max:' . AudioTrainingService::MAX_VOICE_BITRATE_KBPS,
+        ]);
+
+        $target = (int) ($data['voice_bitrate_kbps'] ?? AudioTrainingService::MAX_VOICE_BITRATE_KBPS);
+        $res    = $trainer->upgradeCustomSongBitrate($request->user(), $song, $target);
+
+        return back()->with('ok', $res['message']);
+    }
+
     public function destroySong(Request $request, Song $song, AudioTrainingService $trainer)
     {
-        $user = $request->user();
-        abort_unless(
-            $user->isAdmin() || ($song->uploaded_by !== null && (int) $song->uploaded_by === (int) $user->id),
-            403,
-            'Anda hanya dapat menghapus lagu custom yang Anda impor sendiri.'
-        );
+        AudioTrainingService::authorizeCustomSong($request->user(), $song, 'menghapus');
 
         $title = $song->title;
         $trainer->deleteUserCustomSong($song);

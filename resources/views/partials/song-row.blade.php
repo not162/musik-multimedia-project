@@ -50,6 +50,9 @@
     @isset($removeUrl)
       <form method="POST" action="{{ $removeUrl }}">@csrf @method('DELETE')<button class="icon" title="Hapus dari daftar putar">✕</button></form>
     @endisset
+    @if(!empty($upgradeBitrateUrl))
+      <form method="POST" action="{{ $upgradeBitrateUrl }}">@csrf <input type="hidden" name="voice_bitrate_kbps" value="378"><button class="btn sm ghost" title="Upgrade pita suara ke 378 kbps">⚡ 378 kbps</button></form>
+    @endif
     @if(!empty($deleteCustomUrl))
       <form method="POST" action="{{ $deleteCustomUrl }}" onsubmit="return confirm('Hapus lagu custom ini dari Studio Musik?')">@csrf @method('DELETE')<button class="icon" title="Hapus lagu custom saya">🗑</button></form>
     @endif
