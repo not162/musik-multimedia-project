@@ -429,11 +429,18 @@
     document.body.classList.toggle('player-visible', visible);
   }
 
-  window.musikkuToast = msg => {
-    const t = $('#toast'); if (!t) return;
-    t.textContent = msg; t.classList.add('show');
-    clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 2600);
-  };
+  if (!window.musikkuToast) {
+    window.musikkuToast = (msg, type = 'ok') => {
+      if (typeof window.musikkuNotify === 'function') {
+        return window.musikkuNotify(msg, type);
+      }
+      const t = $('#toast'); if (!t) return;
+      t.textContent = msg; t.className = `show toast-${type}`;
+      clearTimeout(t._h); t._h = setTimeout(() => t.className = '', 3000);
+    };
+  }
+  const notify = (msg, type = 'ok', title = null) =>
+    window.musikkuNotify ? window.musikkuNotify(msg, type, title) : window.musikkuToast(msg, type);
 
   const itemFrom = r => {
     let aiEq = null;
@@ -492,10 +499,12 @@
     if (isAuth()) ensureEqGraph();
     audio.src = st.queue[i].src;
     if (audioCtx?.state === 'suspended') audioCtx.resume().catch(() => {});
-    audio.play().catch(error => {
-      musikkuToast(error.name === 'NotAllowedError'
+    audio.play().then(() => {
+      notify(`Memutar: ${st.queue[i].title}`, 'info', 'Pemutar');
+    }).catch(error => {
+      notify(error.name === 'NotAllowedError'
         ? 'Browser memblokir pemutaran audio. Tekan tombol putar lagi.'
-        : 'Tidak dapat memutar file audio ini.');
+        : 'Tidak dapat memutar file audio ini.', 'error', 'Peringatan');
     });
     renderNow(); renderQueue(); markPlaying(); setSession(st.queue[i]);
     if (isAuth()) applyEqToAudio(true);
@@ -523,7 +532,12 @@
     if (!audio.src) { const first = $('.song-row'); if (first) playRows($$('.song-row'), 0); return; }
     if (isAuth()) ensureEqGraph();
     if (audioCtx?.state === 'suspended') audioCtx.resume().catch(() => {});
-    audio.paused ? audio.play() : audio.pause();
+    if (audio.paused) {
+      audio.play().then(() => notify(`Melanjutkan: ${cur()?.title || 'Musik'}`, 'info', 'Pemutar')).catch(() => {});
+    } else {
+      audio.pause();
+      notify(`Pemutaran dijeda`, 'info', 'Pemutar');
+    }
   }
 
   function playRows(rows, start) { st.queue = rows.map(itemFrom); playAt(start); }
@@ -546,9 +560,9 @@
   async function toggleFav(id) {
     if (!isAuth()) { $('#proLockDialog')?.showModal(); return; }
     const res = await fetch(`${base()}/favorit/${id}`, { method: 'POST', headers: { 'X-CSRF-TOKEN': csrf(), 'Accept': 'application/json' } });
-    if (!res.ok) { musikkuToast('Gagal mengubah favorit'); return; }
+    if (!res.ok) { notify('Gagal mengubah lagu favorit', 'error', 'Peringatan'); return; }
     const j = await res.json(); setFav(id, j.favorited);
-    musikkuToast(j.favorited ? 'Ditambahkan ke favorit' : 'Dihapus dari favorit');
+    notify(j.favorited ? 'Ditambahkan ke lagu favorit' : 'Dihapus dari lagu favorit', j.favorited ? 'ok' : 'warn', 'Favorit');
   }
   let pendingSong = null;
 
@@ -634,16 +648,25 @@
   });
 
   el.play.onclick = toggle; el.next.onclick = () => next(false); el.prev.onclick = prev;
-  el.shuf.onclick = () => setShuffle(!st.shuffle);
+  el.shuf.onclick = () => {
+    setShuffle(!st.shuffle);
+    notify(st.shuffle ? 'Mode acak diaktifkan' : 'Mode acak dimatikan', 'info', 'Pemutar');
+  };
   el.rep.onclick = () => {
     st.repeat = { off: 'all', all: 'one', one: 'off' }[st.repeat];
     el.rep.classList.toggle('on', st.repeat !== 'off');
     el.rep.textContent = st.repeat === 'one' ? '🔂' : '🔁';
-    el.rep.title = 'Ulangi: ' + { off: 'mati', all: 'semua', one: 'satu lagu' }[st.repeat];
+    const repLabel = { off: 'mati', all: 'semua lagu', one: 'satu lagu' }[st.repeat];
+    el.rep.title = 'Ulangi: ' + repLabel;
+    notify(`Mode ulangi: ${repLabel}`, 'info', 'Pemutar');
   };
   el.fav.onclick = () => cur() && toggleFav(cur().id);
   el.qBtn.onclick = () => el.qBox.classList.toggle('hidden');
-  $('#pQueueClear').onclick = () => { st.queue = []; st.i = -1; audio.pause(); audio.removeAttribute('src'); st.hasPlayed = false; setPlayerVisible(false); renderQueue(); markPlaying(); };
+  $('#pQueueClear').onclick = () => {
+    st.queue = []; st.i = -1; audio.pause(); audio.removeAttribute('src'); st.hasPlayed = false;
+    setPlayerVisible(false); renderQueue(); markPlaying();
+    notify('Antrean putar dikosongkan', 'warn', 'Antrean');
+  };
 
   // Pro Controls + EQ Studio Bindings
   buildEqSliders();

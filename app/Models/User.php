@@ -4,7 +4,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\{Hash, Storage};
 use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
@@ -38,6 +38,17 @@ class User extends Authenticatable
     public function lrsStatements()  { return $this->hasMany(LrsStatement::class); }
     public function auditLogs()      { return $this->hasMany(AuditLog::class); }
     public function studioRequests() { return $this->hasMany(StudioRequest::class); }
+
+    public function getAvatarUrlAttribute(): ?string
+    {
+        if (! $this->avatar) {
+            return null;
+        }
+        return route('account.avatar', [
+            'user' => $this->id,
+            'v'    => $this->updated_at?->timestamp ?? 1,
+        ]);
+    }
 
     /** ID lagu favorit (di-cache per request supaya daftar lagu tidak N+1). */
     public function favoriteIds(): array

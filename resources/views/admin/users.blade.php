@@ -5,10 +5,21 @@
 @include('admin._nav')
 <form method="GET" class="actions" style="max-width:420px"><input name="q" value="{{ request('q') }}" placeholder="Cari nama/email…"><button class="btn ghost">Cari</button></form>
 <table class="table">
-  <tr><th>Nama</th><th>Email</th><th>Playlist</th><th>Peran</th><th>Status</th><th>Daftar</th><th></th></tr>
+  <tr><th>Pengguna</th><th>Email</th><th>Playlist</th><th>Peran</th><th>Status</th><th>Daftar</th><th></th></tr>
   @foreach($users as $u)
   <tr>
-    <td>{{ $u->name }}</td>
+    <td>
+      <div class="cell">
+        <div class="avatar-chip">
+          @if($u->avatar_url)
+            <img src="{{ $u->avatar_url }}" alt="{{ $u->name }}">
+          @else
+            <span>{{ strtoupper(mb_substr($u->name, 0, 1)) }}</span>
+          @endif
+        </div>
+        <span>{{ $u->name }}</span>
+      </div>
+    </td>
     <td>{{ $u->email }}</td>
     <td>{{ $u->playlists_count }}</td>
     <td><span class="badge {{ $u->isAdmin() ? 'info' : '' }}">{{ $u->role }}</span></td>

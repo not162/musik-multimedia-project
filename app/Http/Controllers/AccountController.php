@@ -2,12 +2,12 @@
 
 namespace App\Http\Controllers;
 
-use App\Events\SecurityAlertEvent;
+use App\Events\{SecurityAlertEvent, UserNotificationEvent};
 use App\Models\{AuditLog, User};
 use App\Services\LrsService;
 use App\Support\SafeBroadcast;
 use Illuminate\Http\{JsonResponse, Request};
-use Illuminate\Support\Facades\{Hash, RateLimiter};
+use Illuminate\Support\Facades\{Hash, RateLimiter, Storage};
 use Illuminate\Validation\Rules\Password;
 
 class AccountController extends Controller
@@ -31,16 +31,46 @@ class AccountController extends Controller
     public function updateProfile(Request $request)
     {
         $data = $request->validate([
-            'name'  => 'required|string|max:80',
-            'phone' => 'nullable|string|max:20',
+            'name'          => 'required|string|max:80',
+            'phone'         => 'nullable|string|max:20',
+            'avatar'        => 'nullable|image|mimes:jpg,jpeg,png,webp,gif|max:2048',
+            'remove_avatar' => 'nullable|boolean',
         ]);
+        unset($data['avatar'], $data['remove_avatar']);
 
         $user = $request->user();
-        $old  = $user->only(['name', 'phone']);
+        $old  = $user->only(['name', 'phone', 'avatar']);
+
+        if ($request->boolean('remove_avatar') && $user->avatar) {
+            Storage::disk('public')->delete($user->avatar);
+            $data['avatar'] = null;
+        }
+        if ($request->hasFile('avatar')) {
+            if ($user->avatar) {
+                Storage::disk('public')->delete($user->avatar);
+            }
+            $data['avatar'] = $request->file('avatar')->store('avatars', 'public');
+        }
+
         $user->update($data);
 
-        AuditLog::record('update_profile', 'User', $user->id, $old, $data);
-        return back()->with('ok', 'Profil berhasil diperbarui.');
+        AuditLog::record('update_profile', 'User', $user->id, $old, $user->only(['name', 'phone', 'avatar']));
+        SafeBroadcast::dispatch(new UserNotificationEvent(
+            $user->id,
+            'Profil Diperbarui',
+            'Profil dan gambar logo akun Anda berhasil disimpan.',
+            'ok'
+        ));
+
+        return back()->with('ok', 'Profil dan gambar logo akun berhasil diperbarui.');
+    }
+
+    public function avatar(User $user)
+    {
+        abort_unless($user->avatar && Storage::disk('public')->exists($user->avatar), 404);
+        return response()->file(Storage::disk('public')->path($user->avatar), [
+            'Cache-Control' => 'public, max-age=86400',
+        ]);
     }
 
     public function changePassword(Request $request)

@@ -4,7 +4,19 @@
 <div class="hero">
   <div class="hero-grid">
     <div>
-      <span class="badge ok">🎛️ STUDIO MUSIK ANGGOTA · TERHUBUNG LANGSUNG</span>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+        <div class="avatar-lg">
+          @if($user->avatar_url)
+            <img src="{{ $user->avatar_url }}" alt="Logo {{ $user->name }}">
+          @else
+            <span>{{ strtoupper(mb_substr($user->name, 0, 1)) }}</span>
+          @endif
+        </div>
+        <div>
+          <span class="badge ok">🎛️ STUDIO MUSIK ANGGOTA · {{ $user->role }}</span>
+          <div style="font-weight:700;font-size:15px;margin-top:4px">{{ $user->name }}</div>
+        </div>
+      </div>
       <h1>Studio Musik Saya</h1>
       <p class="mut" style="margin:0 0 12px">
         Atur kenyamanan suara saat mendengarkan musik sesuai selera Anda, putar lagu pilihan, atau kirim masukan perbaikan suara ke tim pengelola secara langsung.

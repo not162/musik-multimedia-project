@@ -178,7 +178,7 @@
               badge.textContent = String(cur);
               badge.classList.remove('hidden');
             }
-            window.musikkuToast?.(`🚨 [${e.level.toUpperCase()}] ${e.message}`);
+            window.musikkuNotify?.(`🚨 [${e.level.toUpperCase()}] ${e.message}`, 'error', 'Gangguan Sistem');
 
             const tbl = $('#errorLogsBody');
             if (tbl) {
@@ -190,7 +190,7 @@
             }
           })
           .listen('.security.alert', (e) => {
-            window.musikkuToast?.(`🛡️ Keamanan: ${e.message}`);
+            window.musikkuNotify?.(`🛡️ Keamanan: ${e.message}`, 'warn', 'Keamanan');
           })
           .listen('.studio.request', (e) => {
             if (e.status === 'pending') {

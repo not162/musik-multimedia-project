@@ -43,9 +43,37 @@ class MusikkuEnterpriseTest extends TestCase
             ->get('/akun')
             ->assertStatus(200)
             ->assertSee('Profil Saya')
+            ->assertSee('placeholder="Masukkan nama akun Anda"', false)
+            ->assertSee('Nama akun:')
+            ->assertSee('notifBellBtn')
+            ->assertSee('notify.js')
             ->assertDontSee('Personal API Token')
             ->assertDontSee('SALT ID:')
             ->assertDontSee('HASH: BCRYPT');
+
+        // Upload & display logo gambar akun user + notification flash banner
+        $origName   = $demoUser->name;
+        $origAvatar = $demoUser->avatar;
+        $logoFile   = UploadedFile::fake()->image('user-logo.png', 120, 120);
+
+        $this->actingAs($demoUser)
+            ->put('/akun', [
+                'name'   => 'Pengguna Demo Updated',
+                'phone'  => '08123456789',
+                'avatar' => $logoFile,
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('ok');
+
+        $demoUser->refresh();
+        $this->assertNotEmpty($demoUser->avatar);
+        $this->assertTrue(Storage::disk('public')->exists($demoUser->avatar));
+        $this->get('/profil-logo/' . $demoUser->id)->assertStatus(200);
+        $this->actingAs($demoUser)->get('/akun')->assertSee('/profil-logo/' . $demoUser->id);
+
+        // Restore demoUser name & avatar cleanly
+        Storage::disk('public')->delete($demoUser->avatar);
+        $demoUser->update(['name' => $origName, 'avatar' => $origAvatar]);
 
         // User role blocked from creating API tokens or accessing AI Studio
         $this->actingAs($demoUser)->post('/akun/tokens', ['token_name' => 'Hack'])->assertStatus(403);

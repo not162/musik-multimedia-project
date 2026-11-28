@@ -36,6 +36,7 @@ Route::get('/genre/{genre}', [GenreController::class, 'show'])->name('genres.sho
 Route::get('/label', [LabelController::class, 'index'])->name('labels.index');
 Route::get('/label/{label:slug}', [LabelController::class, 'show'])->name('labels.show');
 Route::get('/p/{playlist}', [PlaylistController::class, 'publicShow'])->name('playlists.public');
+Route::get('/profil-logo/{user}', [AccountController::class, 'avatar'])->name('account.avatar');
 
 // ---- SEO & PWA ----
 Route::get('/sitemap.xml', [SeoController::class, 'sitemap'])->name('sitemap');

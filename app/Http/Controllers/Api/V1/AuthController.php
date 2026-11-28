@@ -12,7 +12,7 @@ use App\Models\{AuditLog, User};
 use App\Services\LrsService;
 use App\Support\SafeBroadcast;
 use Illuminate\Http\{JsonResponse, Request};
-use Illuminate\Support\Facades\{Hash, RateLimiter};
+use Illuminate\Support\Facades\{Hash, RateLimiter, Storage};
 use Illuminate\Validation\Rules\Password;
 
 class AuthController extends Controller
@@ -138,18 +138,26 @@ class AuthController extends Controller
     public function updateProfile(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'name'  => 'sometimes|string|max:80',
-            'phone' => 'sometimes|nullable|string|max:20',
+            'name'   => 'sometimes|string|max:80',
+            'phone'  => 'sometimes|nullable|string|max:20',
+            'avatar' => 'sometimes|nullable|image|mimes:jpg,jpeg,png,webp,gif|max:2048',
         ]);
+        unset($data['avatar']);
 
         $user = $request->user();
-        $old  = $user->only(array_keys($data));
+        $old  = $user->only(['name', 'phone', 'avatar']);
+        if ($request->hasFile('avatar')) {
+            if ($user->avatar) {
+                Storage::disk('public')->delete($user->avatar);
+            }
+            $data['avatar'] = $request->file('avatar')->store('avatars', 'public');
+        }
         $user->update($data);
 
         AuditLog::record('update_profile', 'User', $user->id, $old, $data);
 
         return response()->json([
-            'message' => 'Profil diperbarui.',
+            'message' => 'Profil & gambar logo akun diperbarui.',
             'user'    => $this->userPayload($user->fresh()),
         ]);
     }
@@ -208,6 +216,7 @@ class AuthController extends Controller
             'name'          => $user->name,
             'email'         => $user->email,
             'role'          => $user->role,
+            'avatar_url'    => $user->avatar_url,
             'phone'         => $user->phone,
             'is_active'     => $user->is_active,
             'preferences'   => $user->preferences ?? ['eq_preset' => 'normal', 'speed' => 1.0],

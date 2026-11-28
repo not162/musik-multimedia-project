@@ -65,8 +65,8 @@
     badge.textContent = online ? '● Tersambung' : '○ Tanpa Internet';
     badge.className = 'net-pill ' + (online ? 'is-online' : 'is-offline');
   }
-  window.addEventListener('online', () => { syncNetworkStatus(); window.musikkuToast?.('Internet kembali tersambung'); });
-  window.addEventListener('offline', () => { syncNetworkStatus(); window.musikkuToast?.('Tidak ada internet — lagu simpanan tetap bisa diputar'); });
+  window.addEventListener('online', () => { syncNetworkStatus(); window.musikkuNotify?.('Internet kembali tersambung', 'ok', 'Jaringan'); });
+  window.addEventListener('offline', () => { syncNetworkStatus(); window.musikkuNotify?.('Tidak ada internet — lagu simpanan tetap bisa diputar', 'warn', 'Jaringan'); });
   document.addEventListener('turbo:load', syncNetworkStatus);
   syncNetworkStatus();
 

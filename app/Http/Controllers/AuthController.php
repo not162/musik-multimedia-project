@@ -59,7 +59,7 @@ class AuthController extends Controller
         LrsService::record('logged_in', 'Auth', $user->id, $user->email, ['channel' => 'web']);
 
         $destination = Auth::user()->isAdmin() ? route('admin.dashboard') : route('home');
-        return redirect()->intended($destination);
+        return redirect()->intended($destination)->with('ok', "Selamat datang kembali, {$user->name}! Berhasil masuk ke akun.");
     }
 
     public function register(Request $request)
@@ -101,6 +101,6 @@ class AuthController extends Controller
         Auth::logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();
-        return redirect()->route('home');
+        return redirect()->route('home')->with('ok', 'Anda telah keluar dari akun.');
     }
 }

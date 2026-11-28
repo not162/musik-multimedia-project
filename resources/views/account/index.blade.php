@@ -44,19 +44,29 @@
 @endphp
 
 <div class="panel">
-  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
-    <div>
-      <span class="badge ok">STATUS AKUN: {{ $user->isAdmin() ? 'ADMIN' : 'ANGGOTA' }}</span>
-      @if($user->isAdmin())
-        <span class="badge info">HASH: {{ strtoupper(config('hashing.driver')) }} (Rounds {{ config('hashing.bcrypt.rounds') }})</span>
-        @if($user->password_salt)
-          <span class="badge">SALT ID: {{ substr($user->password_salt, 0, 12) }}…</span>
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px">
+    <div style="display:flex;align-items:center;gap:14px">
+      <div class="avatar-lg" id="profileHeroAvatar">
+        @if($user->avatar_url)
+          <img src="{{ $user->avatar_url }}" alt="Logo {{ $user->name }}">
+        @else
+          <span>{{ strtoupper(mb_substr($user->name, 0, 1)) }}</span>
         @endif
-      @endif
+      </div>
+      <div>
+        <b style="font-size:18px;display:block">{{ $user->name }}</b>
+        <span class="badge ok" style="margin-top:4px">{{ $user->role }}</span>
+        @if($user->isAdmin())
+          <span class="badge info">HASH: {{ strtoupper(config('hashing.driver')) }} (Rounds {{ config('hashing.bcrypt.rounds') }})</span>
+          @if($user->password_salt)
+            <span class="badge">SALT ID: {{ substr($user->password_salt, 0, 12) }}…</span>
+          @endif
+        @endif
+      </div>
     </div>
     <small class="mut">Terakhir masuk: {{ $user->last_login_at?->format('d/m/Y H:i') ?? 'Baru saja' }}</small>
   </div>
-  <h3 style="margin-top:12px">🔓 Fasilitas Akun Anda</h3>
+  <h3 style="margin-top:14px">🔓 Fasilitas Akun Anda</h3>
   <div class="chips" style="margin-top:8px">
     @foreach($features as $feat)
       <span class="chip sm">✅ {{ $featureLabels[$feat] ?? ucwords(str_replace('_', ' ', $feat)) }}</span>
@@ -77,12 +87,36 @@
 
 <div class="two">
   <div class="panel">
-    <h3>Profil Saya</h3>
-    <form method="POST" action="{{ route('account.update') }}" class="form">@csrf @method('PUT')
-      <label>Nama Lengkap <input name="name" value="{{ old('name', $user->name) }}" required maxlength="80"></label>
+    <h3>Profil Saya &amp; Logo Gambar</h3>
+    <form method="POST" action="{{ route('account.update') }}" enctype="multipart/form-data" class="form">@csrf @method('PUT')
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:4px">
+        <div class="avatar-lg" id="avatarFormPreview">
+          @if($user->avatar_url)
+            <img src="{{ $user->avatar_url }}" alt="Logo {{ $user->name }}">
+          @else
+            <span>{{ strtoupper(mb_substr($user->name, 0, 1)) }}</span>
+          @endif
+        </div>
+        <div style="flex:1">
+          <label style="margin:0">Logo / Foto Profil (PNG, JPG, WebP · maks 2 MB)
+            <input type="file" name="avatar" id="avatarInput" accept="image/*">
+          </label>
+          @if($user->avatar_url)
+            <label class="inline" style="margin-top:6px;font-weight:500;font-size:12.5px">
+              <input type="checkbox" name="remove_avatar" value="1"> Hapus logo gambar saat ini
+            </label>
+          @endif
+        </div>
+      </div>
+
+      <label>Nama
+        <input name="name" value="{{ old('name', $user->name) }}" placeholder="Masukkan nama akun Anda" required maxlength="80">
+      </label>
+      <small class="mut" style="display:block;margin:-8px 0 4px">Nama akun: <b>{{ $user->role }}</b> ({{ $user->email }})</small>
+
       <label>Alamat Email <input value="{{ $user->email }}" disabled></label>
       <label>Nomor Telepon <input name="phone" value="{{ old('phone', $user->phone) }}" maxlength="20" placeholder="08xxxxxxxxxx"></label>
-      <button class="btn sm">Simpan Profil</button>
+      <button class="btn sm">💾 Simpan Profil &amp; Logo</button>
     </form>
   </div>
 
@@ -96,6 +130,19 @@
     </form>
   </div>
 </div>
+
+<script>
+document.getElementById('avatarInput')?.addEventListener('change', function () {
+  const file = this.files && this.files[0];
+  if (!file) return;
+  const url = URL.createObjectURL(file);
+  ['avatarFormPreview', 'profileHeroAvatar'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.innerHTML = `<img src="${url}" alt="Pratinjau Logo">`;
+  });
+});
+</script>
 
 @if($user->isAdmin())
 <div class="panel">

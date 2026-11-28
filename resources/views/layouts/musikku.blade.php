@@ -64,6 +64,7 @@
 <script type="module">import 'https://cdn.jsdelivr.net/npm/@hotwired/turbo@8.0.12/dist/turbo.es2017-esm.min.js';</script>
 <script src="{{ asset('js/vendor/pusher.min.js') }}" defer></script>
 <script src="{{ asset('js/vendor/echo.iife.js') }}" defer></script>
+<script src="{{ asset('js/notify.js') }}?v={{ filemtime(public_path('js/notify.js')) }}" defer></script>
 <script src="{{ asset('js/realtime.js') }}?v={{ filemtime(public_path('js/realtime.js')) }}" defer></script>
 <script src="{{ asset('js/pwa.js') }}?v={{ filemtime(public_path('js/pwa.js')) }}" defer></script>
 <script src="{{ asset('js/player.js') }}?v={{ filemtime(public_path('js/player.js')) }}" defer></script>
@@ -122,9 +123,28 @@
       <div class="top-right">
         <span id="netStatus" class="net-pill is-online">● Tersambung</span>
         <span id="rtStatus" class="rt-pill is-idle">⚡ Siap</span>
+        <div class="notif-wrap">
+          <button type="button" id="notifBellBtn" class="notif-btn" title="Pemberitahuan &amp; Alert">
+            🔔 <span id="notifBadge" class="badge danger hidden">0</span>
+          </button>
+          <div id="notifDrawer" class="notif-drawer hidden">
+            <div class="notif-head">
+              <b>🔔 Pemberitahuan Aktivitas</b>
+              <button type="button" id="notifClearBtn" class="btn ghost sm">Bersihkan</button>
+            </div>
+            <ul id="notifList" class="notif-list"></ul>
+          </div>
+        </div>
         @auth
-          <a href="{{ route('account.index') }}" class="badge {{ auth()->user()->isAdmin() ? 'info' : 'ok' }}">
-            {{ auth()->user()->isAdmin() ? 'Admin' : 'Anggota' }} · {{ auth()->user()->name }}
+          <a href="{{ route('account.index') }}" class="badge {{ auth()->user()->isAdmin() ? 'info' : 'ok' }}" style="gap:6px;padding:3px 10px 3px 4px">
+            <span class="avatar-chip sm">
+              @if(auth()->user()->avatar_url)
+                <img src="{{ auth()->user()->avatar_url }}" alt="{{ auth()->user()->name }}">
+              @else
+                <span>{{ strtoupper(mb_substr(auth()->user()->name, 0, 1)) }}</span>
+              @endif
+            </span>
+            {{ auth()->user()->name }} · {{ auth()->user()->role }}
           </a>
           <form method="POST" action="{{ route('logout') }}" style="display:inline" data-turbo="false">@csrf
             <button class="btn ghost sm">Keluar</button>
@@ -148,7 +168,24 @@
         </div>
       </div>
 
-      @if(session('ok'))<div class="flash">{{ session('ok') }}</div>@endif
+      @php
+        $flashItems = [];
+        if (session('ok'))    $flashItems[] = ['type' => 'ok',    'title' => 'Berhasil',  'message' => session('ok')];
+        if (session('info'))  $flashItems[] = ['type' => 'info',  'title' => 'Info',      'message' => session('info')];
+        if (session('warn'))  $flashItems[] = ['type' => 'warn',  'title' => 'Perhatian', 'message' => session('warn')];
+        if (session('error')) $flashItems[] = ['type' => 'error', 'title' => 'Peringatan','message' => session('error')];
+        if ($errors->any()) {
+            foreach ($errors->all() as $errMsg) {
+                $flashItems[] = ['type' => 'error', 'title' => 'Peringatan', 'message' => $errMsg];
+            }
+        }
+      @endphp
+      <div id="flashAlerts" data-flash-items='@json($flashItems)'>
+        @if(session('ok'))<div class="flash">✅ {{ session('ok') }}</div>@endif
+        @if(session('info'))<div class="flash is-info">ℹ️ {{ session('info') }}</div>@endif
+        @if(session('warn'))<div class="flash is-warn">⚠️ {{ session('warn') }}</div>@endif
+        @if(session('error'))<div class="flash is-error">🚨 {{ session('error') }}</div>@endif
+      </div>
       @yield('content')
     </main>
   </div>
