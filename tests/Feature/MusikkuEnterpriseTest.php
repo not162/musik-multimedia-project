@@ -18,11 +18,8 @@ class MusikkuEnterpriseTest extends TestCase
             ->assertSee('Daftar Label Musik Baru')
             ->assertSee('Dengarkan Musik Lebih Nyaman')
             ->assertSee('manifest.webmanifest')
-            ->assertSee('musikkuSplashLoader')
-            ->assertSee('Musik Jernih, Suara Halus')
-            ->assertSee('Visi Musikku')
-            ->assertSee('Misi Musikku')
-            ->assertSee('loader.js')
+            ->assertDontSee('musikkuSplashLoader')
+            ->assertDontSee('loader.js')
             ->assertDontSee('Personal API Token')
             ->assertDontSee('Mengenal Produk Musikku');
 
@@ -260,6 +257,8 @@ class MusikkuEnterpriseTest extends TestCase
         $this->actingAs($user)->get('/studio-musik')
             ->assertStatus(200)
             ->assertSee('Studio Musik Saya')
+            ->assertDontSee('musikkuSplashLoader')
+            ->assertDontSee('loader.js')
             ->assertDontSee('API AI Key')
             ->assertDontSee('NVIDIA AI')
             ->assertDontSee('Personal API Token');
