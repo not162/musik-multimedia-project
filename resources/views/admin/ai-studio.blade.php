@@ -102,6 +102,41 @@
   </div>
 </div>
 
+{{-- Permintaan Masuk Real-Time dari Studio Musik Pengguna --}}
+<div class="panel">
+  <h3 style="margin:0 0 4px">📨 Permintaan Masuk dari Studio Musik Pengguna (Real-Time)</h3>
+  <p class="mut" style="font-size:13px;margin:0 0 10px">Permintaan yang dikirim pengguna lewat menu <b>Studio Musik</b> muncul otomatis di sini. Klik proses agar Model AI menghaluskan suara lalu mengirim hasilnya balik ke pengguna secara langsung.</p>
+  <table class="table">
+    <tr><th>Pengguna</th><th>Lagu</th><th>Karakter Diminta</th><th>Catatan</th><th>Status</th><th>Tindakan</th></tr>
+    @forelse($studioRequests as $sr)
+      <tr>
+        <td><b>{{ $sr->user?->name }}</b></td>
+        <td>{{ $sr->song?->title }}</td>
+        <td><span class="badge info">{{ $presets[$sr->desired_style]['label'] ?? $sr->desired_style }}</span></td>
+        <td><small>{{ $sr->note ?: '—' }}</small></td>
+        <td>
+          @if($sr->status === 'completed')
+            <span class="badge ok">✓ Selesai</span>
+          @else
+            <span class="badge warn">⏳ Menunggu</span>
+          @endif
+        </td>
+        <td class="act">
+          @if($sr->status === 'pending' && $sr->song)
+            <form method="POST" action="{{ route('admin.ai.requestProcess', $sr) }}">@csrf
+              <button class="btn sm">🪄 Proses Dengan Model AI</button>
+            </form>
+          @else
+            <small class="mut">{{ $sr->processed_at?->diffForHumans() ?? 'Selesai' }}</small>
+          @endif
+        </td>
+      </tr>
+    @empty
+      <tr><td colspan="6" class="mut">Belum ada permintaan dari Studio Musik pengguna.</td></tr>
+    @endforelse
+  </table>
+</div>
+
 {{-- 2. Alat Bantu Latih Model AI: Labelling, Train, Validation --}}
 <div class="panel">
   <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px">

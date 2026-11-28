@@ -12,14 +12,15 @@
         </p>
         <div class="actions" style="margin:0">
           <button class="btn js-play-all" data-scope="#trend">▶ Putar Lagu Populer</button>
+          <a class="btn ghost" href="{{ route('studio.index') }}">🎛️ Studio Musik</a>
           <a class="btn ghost" href="{{ route('playlists.index') }}">📂 Daftar Putar Saya</a>
-          <a class="btn ghost" href="{{ route('account.index') }}">🎛️ {{ auth()->user()->isAdmin() ? 'Akun & Pengaturan' : 'Profil & Pengaturan Suara' }}</a>
+          <a class="btn ghost" href="{{ route('account.index') }}">{{ auth()->user()->isAdmin() ? '⚙️ Akun Admin' : '👤 Profil Saya' }}</a>
         </div>
       @else
         <span class="badge info">✨ PEMUTAR MUSIK JERNIH &amp; HALUS</span>
         <h1>Dengarkan Musik Lebih Nyaman, Halus, dan Jernih</h1>
         <p class="mut" style="margin:0 0 16px">
-          Musikku adalah tempat mendengarkan lagu dengan suara yang telah dirapikan oleh kecerdasan buatan agar lebih halus dan jernih, langsung update otomatis, serta dilengkapi koleksi label musik terbaru.
+          Musikku adalah tempat mendengarkan lagu dengan suara yang telah dirapikan lewat Studio Musik agar lebih halus dan jernih, pembaruan lagu otomatis, serta koleksi label musik terbaru.
         </p>
         <div class="actions" style="margin:0">
           <button class="btn js-play-all" data-scope="#trend">▶ Putar Sekarang</button>

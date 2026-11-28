@@ -17,7 +17,7 @@
         @if($song->is_voice_smoothed)
           <span class="badge ok">✨ Suara Halus &amp; Jernih · Kejernihan {{ $song->voice_clarity_score }}/100</span>
         @elseif($song->is_ai_finetuned)
-          <span class="badge ok">✨ Suara Ditingkatkan AI{{ $song->ai_mood ? ' · '.$song->ai_mood : '' }}</span>
+          <span class="badge ok">✨ Studio Musik{{ $song->ai_mood ? ' · '.$song->ai_mood : '' }}</span>
         @endif
         @if($song->target_sample_rate_khz)
           <span class="badge info">🔊 Master {{ $song->target_sample_rate_khz }} kHz</span>

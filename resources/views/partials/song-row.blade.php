@@ -31,7 +31,7 @@
         @if($song->is_voice_smoothed)
           <span class="badge ok">✨ Suara Halus &amp; Jernih</span>
         @elseif($song->is_ai_finetuned)
-          <span class="badge ok">✨ Suara AI{{ $song->ai_mood ? ' · '.$song->ai_mood : '' }}</span>
+          <span class="badge ok">✨ Studio Musik{{ $song->ai_mood ? ' · '.$song->ai_mood : '' }}</span>
         @endif
       </span>
     </small>

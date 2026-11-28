@@ -35,8 +35,9 @@ class User extends Authenticatable
     public function favoriteSongs() { return $this->belongsToMany(Song::class, 'favorites')->withTimestamps(); }
     public function playlists()     { return $this->hasMany(Playlist::class); }
     public function playHistories() { return $this->hasMany(PlayHistory::class); }
-    public function lrsStatements() { return $this->hasMany(LrsStatement::class); }
-    public function auditLogs()     { return $this->hasMany(AuditLog::class); }
+    public function lrsStatements()  { return $this->hasMany(LrsStatement::class); }
+    public function auditLogs()      { return $this->hasMany(AuditLog::class); }
+    public function studioRequests() { return $this->hasMany(StudioRequest::class); }
 
     /** ID lagu favorit (di-cache per request supaya daftar lagu tidak N+1). */
     public function favoriteIds(): array

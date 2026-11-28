@@ -13,6 +13,7 @@ use App\Http\Controllers\{
     PlaylistController,
     SeoController,
     SongController,
+    StudioController,
 };
 use App\Http\Controllers\Admin;
 use App\Http\Middleware\EnsureAdmin;
@@ -61,6 +62,11 @@ Route::middleware('auth')->group(function () {
     Route::post('/akun/tokens', [AccountController::class, 'createToken'])->middleware(EnsureAdmin::class)->name('account.tokens.create');
     Route::delete('/akun/tokens/{tokenId}', [AccountController::class, 'revokeToken'])->middleware(EnsureAdmin::class)->name('account.tokens.revoke');
 
+    // Fitur User Role: Studio Musik (terpisah dari API & AI Admin, tersinkron real-time)
+    Route::get('/studio-musik', [StudioController::class, 'index'])->name('studio.index');
+    Route::post('/studio-musik/preferensi', [StudioController::class, 'savePreferences'])->name('studio.preferences');
+    Route::post('/studio-musik/requests', [StudioController::class, 'storeRequest'])->name('studio.requests.store');
+
     Route::get('/favorit', [FavoriteController::class, 'index'])->name('favorites.index');
     Route::post('/favorit/{song}', [FavoriteController::class, 'toggle'])->name('favorites.toggle');
 
@@ -100,6 +106,7 @@ Route::middleware(['auth', EnsureAdmin::class])->prefix('admin')->name('admin.')
     Route::post('ai-studio/polish-all', [Admin\AiStudioController::class, 'polishAll'])->name('ai.polishAll');
     Route::post('ai-studio/songs/{song}/finetune', [Admin\AiStudioController::class, 'finetuneSong'])->name('ai.finetune');
     Route::put('ai-studio/songs/{song}/manual', [Admin\AiStudioController::class, 'manualFinetune'])->name('ai.manual');
+    Route::post('ai-studio/requests/{studioRequest}/process', [Admin\AiStudioController::class, 'processStudioRequest'])->name('ai.requestProcess');
     Route::patch('api-management/rules/{rule}', [Admin\AiStudioController::class, 'updateRule'])->name('api.ruleUpdate');
 
     Route::get('users', [Admin\UserController::class, 'index'])->name('users.index');

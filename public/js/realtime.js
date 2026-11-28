@@ -120,7 +120,7 @@
         })
         .listen('.song.finetuned', (e) => {
           const suffix = e.is_voice_smoothed ? ' (Halus & Jernih)' : (e.mood ? ' (' + e.mood + ')' : '');
-          window.musikkuToast?.(`✨ Suara lagu dirapikan AI: ${e.title}${suffix}`);
+          window.musikkuToast?.(`✨ Suara lagu diperbarui Studio Musik: ${e.title}${suffix}`);
           document.querySelectorAll(`.song-row[data-id="${e.song_id}"]`).forEach((row) => {
             if (e.eq_bands) row.dataset.aiEq = JSON.stringify(e.eq_bands);
             row.dataset.aiMood = e.mood || '';
@@ -132,7 +132,7 @@
             if (slot) {
               slot.innerHTML = e.is_voice_smoothed
                 ? '<span class="badge ok">✨ Suara Halus &amp; Jernih</span>'
-                : `<span class="badge ok">✨ Suara AI${e.mood ? ' · ' + e.mood : ''}</span>`;
+                : `<span class="badge ok">✨ Studio Musik${e.mood ? ' · ' + e.mood : ''}</span>`;
             }
           });
           window.dispatchEvent(new CustomEvent('musikku:song-finetuned', { detail: e }));
@@ -148,6 +148,11 @@
         echo.private(`user.${cfg.userId}`)
           .listen('.user.notification', (e) => {
             window.musikkuToast?.(`${e.title}: ${e.message}`);
+          })
+          .listen('.studio.request', (e) => {
+            if (e.status === 'completed') {
+              refreshCatalogView(`🎛️ Studio Musik: Permintaan "${e.song_title}" sudah selesai dirapikan!`);
+            }
           });
 
         let members = [];
@@ -186,10 +191,15 @@
           })
           .listen('.security.alert', (e) => {
             window.musikkuToast?.(`🛡️ Keamanan: ${e.message}`);
+          })
+          .listen('.studio.request', (e) => {
+            if (e.status === 'pending') {
+              refreshCatalogView(`📨 Permintaan Studio baru dari ${e.user_name}: "${e.song_title}"`);
+            }
           });
       }
     } catch (err) {
-      setStatus('WS Standby', false);
+      setStatus('⚡ Siap', false);
     }
   }
 

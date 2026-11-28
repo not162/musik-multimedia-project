@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Events\SongFinetunedEvent;
 use App\Http\Controllers\Controller;
-use App\Models\{AiTrainingRun, ApiEndpointRule, AudioTrainingSample, AuditLog, RecordLabel, Song};
+use App\Models\{AiTrainingRun, ApiEndpointRule, AudioTrainingSample, AuditLog, RecordLabel, Song, StudioRequest};
 use App\Services\{AiMusicService, AudioTrainingService, CatalogSyncService};
 use App\Support\SafeBroadcast;
 use Illuminate\Http\Request;
@@ -23,22 +23,24 @@ class AiStudioController extends Controller
         $tokens  = PersonalAccessToken::with('tokenable:id,name,email,role')
             ->latest()->limit(20)->get();
 
-        $samples   = AudioTrainingSample::with('song.artist:id,name')->latest('updated_at')->get();
-        $runs      = AiTrainingRun::latest()->limit(6)->get();
-        $latestRun = $runs->first();
-        $presets   = AudioTrainingService::VOICE_PRESETS;
+        $samples        = AudioTrainingSample::with('song.artist:id,name')->latest('updated_at')->get();
+        $runs           = AiTrainingRun::latest()->limit(6)->get();
+        $latestRun      = $runs->first();
+        $presets        = AudioTrainingService::VOICE_PRESETS;
+        $studioRequests = StudioRequest::with(['user:id,name,email', 'song:id,title,voice_preset'])
+            ->latest()->limit(20)->get();
 
         $trainStats = [
-            'labeled'    => $samples->count(),
-            'train'      => $samples->where('dataset_split', 'train')->count(),
-            'validation' => $samples->where('dataset_split', 'validation')->count(),
-            'smoothed'   => $songs->where('is_voice_smoothed', true)->count(),
+            'labeled'     => $samples->count(),
+            'train'       => $samples->where('dataset_split', 'train')->count(),
+            'validation'  => $samples->where('dataset_split', 'validation')->count(),
+            'smoothed'    => $songs->where('is_voice_smoothed', true)->count(),
             'avg_clarity' => (int) round($songs->whereNotNull('voice_clarity_score')->avg('voice_clarity_score') ?: 0),
         ];
 
         return view('admin.ai-studio', compact(
             'setting', 'songs', 'labels', 'rules', 'tokens',
-            'samples', 'runs', 'latestRun', 'presets', 'trainStats'
+            'samples', 'runs', 'latestRun', 'presets', 'trainStats', 'studioRequests'
         ));
     }
 
@@ -195,6 +197,7 @@ class AiStudioController extends Controller
             ],
             description: "Melatih suara '{$song->title}' agar lebih halus dan jernih.");
 
+        StudioRequest::completePendingForSong($res['song'], auth()->id());
         SafeBroadcast::dispatch(new SongFinetunedEvent($res['song'], $res['source']));
         CatalogSyncService::bump('finetuned', 'song', $song->id, $song->title, [
             'format'        => $res['song']->media_format,
@@ -203,6 +206,30 @@ class AiStudioController extends Controller
 
         $freqNote = $targetKhz ? " · Arsip master {$targetKhz} kHz siap" : '';
         return back()->with('ok', "Suara \"{$song->title}\" berhasil dilatih menjadi lebih halus & jernih! Kejernihan: {$res['before_clarity']} → {$res['after_clarity']}/100 · Kehalusan: {$res['before_smoothness']} → {$res['after_smoothness']}/100{$freqNote}.");
+    }
+
+    public function processStudioRequest(Request $request, StudioRequest $studioRequest, AudioTrainingService $trainer)
+    {
+        $song = $studioRequest->song;
+        $res  = $trainer->polishSongVoice(
+            $song,
+            $studioRequest->desired_style ?: 'halus_jernih',
+            'medium',
+            (string) ($studioRequest->note ?? ''),
+            true,
+            auth()->id()
+        );
+
+        StudioRequest::completePendingForSong(
+            $res['song'],
+            auth()->id(),
+            $request->input('admin_reply') ?: "Suara lagu \"{$song->title}\" telah dihaluskan sesuai permintaan Studio Musik Anda."
+        );
+        StudioRequest::completePendingForSong($res['song'], auth()->id());
+        SafeBroadcast::dispatch(new SongFinetunedEvent($res['song'], $res['source']));
+        CatalogSyncService::bump('finetuned', 'song', $song->id, $song->title);
+
+        return back()->with('ok', "Permintaan dari {$studioRequest->user?->name} untuk \"{$song->title}\" selesai diproses AI & langsung dikirim ke Studio Musik User.");
     }
 
     public function polishAll(Request $request, AudioTrainingService $trainer)
@@ -243,6 +270,7 @@ class AiStudioController extends Controller
             newValues: ['source' => $res['source'], 'direction' => $res['song']->ai_direction, 'mood' => $res['song']->ai_mood],
             description: "Penyesuaian suara AI untuk '{$song->title}'");
 
+        StudioRequest::completePendingForSong($res['song'], auth()->id());
         SafeBroadcast::dispatch(new SongFinetunedEvent($res['song'], $res['source']));
         CatalogSyncService::bump('finetuned', 'song', $song->id, $song->title);
 

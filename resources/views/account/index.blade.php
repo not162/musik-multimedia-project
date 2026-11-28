@@ -1,7 +1,7 @@
 @extends('layouts.musikku')
 @section('title', $user->isAdmin() ? 'Akun & Akses Admin' : 'Profil Saya')
 @section('content')
-<h1>{{ $user->isAdmin() ? '🎛️ Akun Admin, Keamanan & Kunci Akses' : '👤 Profil Saya & Pengaturan Suara' }}</h1>
+<h1>{{ $user->isAdmin() ? '🎛️ Akun Admin, Keamanan & Kunci Akses' : '👤 Profil Saya & Studio Musik' }}</h1>
 @include('partials.errors')
 
 @php
@@ -64,11 +64,14 @@
   </div>
   <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
     <div>
-      <b>🎛️ Pengaturan Suara Aktif:</b>
+      <b>🎛️ Studio Musik Aktif:</b>
       <span class="badge info">{{ $modeLabels[$eqModeNow] ?? 'Atur Sendiri' }}</span>
       <span class="badge ok">{{ $dirLabels[$eqDirNow] ?? 'Seimbang & Alami' }}</span>
     </div>
-    <button type="button" class="btn ghost sm" onclick="document.getElementById('pEqStudioBtn')?.click()">🎛️ Buka Pengatur Suara</button>
+    <div class="actions" style="margin:0">
+      <a class="btn sm" href="{{ route('studio.index') }}">🎛️ Buka Studio Musik</a>
+      <button type="button" class="btn ghost sm" onclick="document.getElementById('pEqStudioBtn')?.click()">🎚️ Pengatur Cepat</button>
+    </div>
   </div>
 </div>
 

@@ -93,6 +93,13 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
             ->middleware('api.rule:user.playlists');
         Route::post('playlists/{playlist}/songs/{song}', [V1\PlaylistController::class, 'addSong'])->name('playlists.songs.add');
         Route::delete('playlists/{playlist}/songs/{song}', [V1\PlaylistController::class, 'removeSong'])->name('playlists.songs.remove');
+
+        // Endpoint 2 (User Role): Studio Musik — terpisah dari Admin AI/API tapi tersambung real-time
+        Route::middleware('api.rule:user.studio')->prefix('studio')->name('studio.')->group(function () {
+            Route::get('/', [V1\StudioController::class, 'index'])->name('index');
+            Route::put('preferences', [V1\StudioController::class, 'updatePreferences'])->name('preferences');
+            Route::post('requests', [V1\StudioController::class, 'storeRequest'])->name('requests.store');
+        });
     });
 
     // ── Admin Role ONLY (Bearer Token + active check + EnsureAdmin) ──
@@ -118,6 +125,11 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
             Route::post('ai/songs/{song}/finetune', [V1\Admin\AiStudioController::class, 'finetuneSong'])
                 ->middleware('api.rule:admin.ai')
                 ->name('ai.finetune');
+            Route::get('ai/studio-requests', [V1\Admin\AiStudioController::class, 'studioRequests'])
+                ->name('ai.studioRequests');
+            Route::post('ai/studio-requests/{studioRequest}/process', [V1\Admin\AiStudioController::class, 'processStudioRequest'])
+                ->middleware('api.rule:admin.ai')
+                ->name('ai.studioRequests.process');
             Route::patch('api-management/rules/{rule}', [V1\Admin\AiStudioController::class, 'updateRule'])->name('api-management.rules.update');
 
             // Users CRUD + role/status/unlock

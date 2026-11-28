@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Api\V1\Admin;
 
 use App\Events\SongFinetunedEvent;
 use App\Http\Controllers\Controller;
-use App\Models\{AiTrainingRun, ApiEndpointRule, AudioTrainingSample, AuditLog, Song};
+use App\Models\{AiTrainingRun, ApiEndpointRule, AudioTrainingSample, AuditLog, Song, StudioRequest};
 use App\Services\{AiMusicService, AudioTrainingService, CatalogSyncService};
 use App\Support\SafeBroadcast;
 use Illuminate\Http\{JsonResponse, Request};
@@ -161,6 +161,7 @@ class AiStudioController extends Controller
             $targetKhz
         );
 
+        StudioRequest::completePendingForSong($res['song'], auth()->id());
         SafeBroadcast::dispatch(new SongFinetunedEvent($res['song'], $res['source']));
         CatalogSyncService::bump('finetuned', 'song', $song->id, $song->title, [
             'format'        => $res['song']->media_format,
@@ -180,6 +181,41 @@ class AiStudioController extends Controller
         ]);
     }
 
+    public function studioRequests(): JsonResponse
+    {
+        return response()->json([
+            'feature'  => 'admin_ai_studio',
+            'requests' => StudioRequest::with(['user:id,name,email', 'song:id,title,voice_preset'])->latest()->limit(30)->get(),
+        ]);
+    }
+
+    public function processStudioRequest(Request $request, StudioRequest $studioRequest, AudioTrainingService $trainer): JsonResponse
+    {
+        $song = $studioRequest->song;
+        $res  = $trainer->polishSongVoice(
+            $song,
+            $studioRequest->desired_style ?: 'halus_jernih',
+            'medium',
+            (string) ($studioRequest->note ?? ''),
+            true,
+            auth()->id()
+        );
+
+        StudioRequest::completePendingForSong(
+            $res['song'],
+            auth()->id(),
+            $request->input('admin_reply') ?: "Suara lagu \"{$song->title}\" selesai dihaluskan lewat AI Studio Admin."
+        );
+        SafeBroadcast::dispatch(new SongFinetunedEvent($res['song'], $res['source']));
+        CatalogSyncService::bump('finetuned', 'song', $song->id, $song->title);
+
+        return response()->json([
+            'message'        => 'Permintaan Studio User selesai diproses & disiarkan real-time.',
+            'studio_request' => $studioRequest->fresh(['user:id,name', 'song:id,title,is_voice_smoothed,voice_clarity_score']),
+            'song'           => $res['song'],
+        ]);
+    }
+
     public function finetuneSong(Request $request, Song $song, AiMusicService $ai): JsonResponse
     {
         $data = $request->validate([
@@ -194,6 +230,7 @@ class AiStudioController extends Controller
 
         $res = $ai->finetuneSong($song, (string) ($data['target_prompt'] ?? ''), $data['direction_hint'] ?? null);
 
+        StudioRequest::completePendingForSong($res['song'], auth()->id());
         SafeBroadcast::dispatch(new SongFinetunedEvent($res['song'], $res['source']));
         CatalogSyncService::bump('finetuned', 'song', $song->id, $song->title);
 

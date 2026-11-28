@@ -40,6 +40,7 @@ class Song extends Model
     public function histories()       { return $this->hasMany(PlayHistory::class); }
     public function favoritedBy()     { return $this->belongsToMany(User::class, 'favorites')->withTimestamps(); }
     public function trainingSamples() { return $this->hasMany(AudioTrainingSample::class); }
+    public function studioRequests()  { return $this->hasMany(StudioRequest::class); }
 
     public function getArtUrlAttribute(): ?string
     {

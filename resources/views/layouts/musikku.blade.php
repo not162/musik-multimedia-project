@@ -83,7 +83,8 @@
       <a href="{{ route('charts') }}" class="{{ request()->routeIs('charts') ? 'on' : '' }}">📈 Lagu Populer</a>
       <a href="{{ route('labels.index') }}" class="{{ request()->routeIs('labels.*') ? 'on' : '' }}">🏷️ Label Musik</a>
       @auth
-        <div class="sep">Koleksi Saya</div>
+        <div class="sep">Koleksi &amp; Studio</div>
+        <a href="{{ route('studio.index') }}" class="{{ request()->routeIs('studio.*') ? 'on' : '' }}">🎛️ Studio Musik</a>
         <a href="{{ route('favorites.index') }}" class="{{ request()->routeIs('favorites.*') ? 'on' : '' }}">♥ Favorit</a>
         <a href="{{ route('playlists.index') }}" class="{{ request()->routeIs('playlists.index', 'playlists.show') ? 'on' : '' }}">📂 Daftar Putar</a>
         <a href="{{ route('history.index') }}" class="{{ request()->routeIs('history.*') ? 'on' : '' }}">🕘 Riwayat</a>
@@ -185,7 +186,7 @@
       <option value="adaptive">🎯 Haluskan Otomatis</option>
       <option value="custom">🎛️ Atur Sendiri</option>
     </select>
-    <button id="pEqStudioBtn" type="button" class="btn ghost sm" title="Buka Pengatur Suara Halus & Jernih">🎛️ Atur Suara</button>
+    <button id="pEqStudioBtn" type="button" class="btn ghost sm" title="Buka Studio Musik">🎛️ Studio Musik</button>
     <select id="pSpeed" title="Kecepatan Lagu (Khusus Anggota)">
       <option value="1">1.0x @guest 🔒@endguest</option>
       <option value="0.75">0.75x</option>

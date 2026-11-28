@@ -2,7 +2,7 @@
 
 namespace Tests\Feature;
 
-use App\Models\{AiProviderSetting, ApiEndpointRule, Artist, RecordLabel, Song, User};
+use App\Models\{AiProviderSetting, ApiEndpointRule, Artist, RecordLabel, Song, StudioRequest, User};
 use Illuminate\Foundation\Testing\TestCase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\{Hash, Storage};
@@ -243,5 +243,79 @@ class MusikkuEnterpriseTest extends TestCase
         }
 
         $admin->tokens()->where('name', 'test-admin')->delete();
+    }
+
+    public function test_two_connected_roles_user_studio_and_admin_ai_realtime(): void
+    {
+        $user  = User::where('email', 'user@musikku.test')->firstOrFail();
+        $admin = User::where('email', 'admin@musikku.test')->firstOrFail();
+        $song  = Song::firstOrFail();
+
+        // 1. User role sees Studio Musik (web & endpoint) and NEVER sees Admin API AI config
+        $this->actingAs($user)->get('/studio-musik')
+            ->assertStatus(200)
+            ->assertSee('Studio Musik Saya')
+            ->assertDontSee('API AI Key')
+            ->assertDontSee('NVIDIA AI')
+            ->assertDontSee('Personal API Token');
+
+        $this->actingAs($user)->get('/akun')
+            ->assertStatus(200)
+            ->assertSee('Studio Musik')
+            ->assertDontSee('API AI')
+            ->assertDontSee('Personal API Token');
+
+        $this->actingAs($user)->get('/admin/ai-studio')->assertStatus(403);
+
+        $userToken = $user->createToken('test-user-studio', ['user'])->plainTextToken;
+        $adminToken = $admin->createToken('test-admin-studio', ['admin', 'user'])->plainTextToken;
+
+        // 2. Endpoint User (/api/v1/studio) isolated from Admin AI endpoint
+        $this->withToken($userToken)->getJson('/api/v1/admin/ai/status')->assertStatus(403);
+        $this->withToken($userToken)->getJson('/api/v1/admin/ai/studio-requests')->assertStatus(403);
+
+        $studioGet = $this->withToken($userToken)->getJson('/api/v1/studio');
+        $studioGet->assertStatus(200)
+            ->assertJsonPath('feature', 'studio_musik_user')
+            ->assertDontSee('api_key_encrypted')
+            ->assertDontSee('key_hint');
+
+        $verBefore = $studioGet->json('catalog_version');
+
+        // 3. User updates Studio Musik preferences & sends real-time request through Endpoint 2
+        $this->withToken($userToken)->putJson('/api/v1/studio/preferences', [
+            'eq_mode'      => 'auto_genre',
+            'eq_direction' => 'bright_clear',
+            'eq_intensity' => 85,
+        ])->assertStatus(200);
+
+        $reqRes = $this->withToken($userToken)->postJson('/api/v1/studio/requests', [
+            'song_id'       => $song->id,
+            'desired_style' => 'halus_jernih',
+            'note'          => 'Uji permintaan Studio Musik ke Admin',
+        ]);
+        $reqRes->assertStatus(201)->assertJsonPath('request.status', 'pending');
+        $reqId = $reqRes->json('request.id');
+
+        // 4. Admin sees the request via Endpoint 1 (/api/v1/admin/ai/studio-requests) & processes it with AI
+        $this->app['auth']->forgetGuards();
+        $this->withToken($adminToken)->getJson('/api/v1/admin/ai/studio-requests')
+            ->assertStatus(200)
+            ->assertSee('Uji permintaan Studio Musik ke Admin');
+
+        $this->withToken($adminToken)->postJson("/api/v1/admin/ai/studio-requests/{$reqId}/process", [
+            'admin_reply' => 'Selesai dirapikan dari AI Admin untuk Studio Musik User.',
+        ])->assertStatus(200)->assertJsonPath('studio_request.status', 'completed');
+
+        // 5. User Studio endpoint immediately sees completion & incremented real-time catalog version
+        $this->app['auth']->forgetGuards();
+        $userAfter = $this->withToken($userToken)->getJson('/api/v1/studio')->assertStatus(200);
+        $this->assertGreaterThan($verBefore, $userAfter->json('catalog_version'));
+        $userAfter->assertSee('Selesai dirapikan dari AI Admin untuk Studio Musik User.');
+
+        // 6. Clean up temporary tokens & test request row
+        StudioRequest::where('id', $reqId)->delete();
+        $user->tokens()->where('name', 'test-user-studio')->delete();
+        $admin->tokens()->where('name', 'test-admin-studio')->delete();
     }
 }

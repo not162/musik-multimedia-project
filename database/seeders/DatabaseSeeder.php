@@ -212,9 +212,10 @@ class DatabaseSeeder extends Seeder
         $rules = [
             ['group_name' => 'public', 'endpoint_key' => 'public.songs',   'uri_pattern' => '/api/v1/songs',              'method' => 'GET',       'rate_limit_per_min' => 60,  'description' => 'Katalog lagu publik, label & AI profile'],
             ['group_name' => 'public', 'endpoint_key' => 'public.labels',  'uri_pattern' => '/api/v1/labels',             'method' => 'GET',       'rate_limit_per_min' => 60,  'description' => 'Daftar label musik baru untuk halaman publik'],
-            ['group_name' => 'user',   'endpoint_key' => 'user.favorites', 'uri_pattern' => '/api/v1/favorites',          'method' => 'GET/POST',  'rate_limit_per_min' => 60,  'description' => 'Koleksi favorit pengguna terdaftar'],
-            ['group_name' => 'user',   'endpoint_key' => 'user.playlists', 'uri_pattern' => '/api/v1/playlists',          'method' => 'CRUD',      'rate_limit_per_min' => 60,  'description' => 'Playlist pribadi & publik pengguna'],
-            ['group_name' => 'admin',  'endpoint_key' => 'admin.ai',       'uri_pattern' => '/api/v1/admin/ai/finetune',  'method' => 'POST',      'rate_limit_per_min' => 30,  'description' => 'AI Music Fine-Tuning & DSP broadcast ke user/publik'],
+            ['group_name' => 'user',   'endpoint_key' => 'user.favorites', 'uri_pattern' => '/api/v1/favorites',          'method' => 'GET/POST',     'rate_limit_per_min' => 60,  'description' => 'Koleksi favorit pengguna terdaftar'],
+            ['group_name' => 'user',   'endpoint_key' => 'user.playlists', 'uri_pattern' => '/api/v1/playlists',          'method' => 'CRUD',         'rate_limit_per_min' => 60,  'description' => 'Playlist pribadi & publik pengguna'],
+            ['group_name' => 'user',   'endpoint_key' => 'user.studio',    'uri_pattern' => '/api/v1/studio',             'method' => 'GET/PUT/POST', 'rate_limit_per_min' => 60,  'description' => 'Studio Musik Pengguna (Terhubung real-time ke Studio Admin)'],
+            ['group_name' => 'admin',  'endpoint_key' => 'admin.ai',       'uri_pattern' => '/api/v1/admin/ai/finetune',  'method' => 'POST',         'rate_limit_per_min' => 30,  'description' => 'AI Music Fine-Tuning & DSP broadcast ke user/publik'],
         ];
         foreach ($rules as $r) {
             ApiEndpointRule::firstOrCreate(['endpoint_key' => $r['endpoint_key']], $r);
