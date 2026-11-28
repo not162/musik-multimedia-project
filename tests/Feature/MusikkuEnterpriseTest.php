@@ -18,6 +18,11 @@ class MusikkuEnterpriseTest extends TestCase
             ->assertSee('Daftar Label Musik Baru')
             ->assertSee('Dengarkan Musik Lebih Nyaman')
             ->assertSee('manifest.webmanifest')
+            ->assertSee('musikkuSplashLoader')
+            ->assertSee('Musik Jernih, Suara Halus')
+            ->assertSee('Visi Musikku')
+            ->assertSee('Misi Musikku')
+            ->assertSee('loader.js')
             ->assertDontSee('Personal API Token')
             ->assertDontSee('Mengenal Produk Musikku');
 

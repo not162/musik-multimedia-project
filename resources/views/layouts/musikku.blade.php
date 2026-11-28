@@ -67,6 +67,7 @@
 <script src="{{ asset('js/realtime.js') }}?v={{ filemtime(public_path('js/realtime.js')) }}" defer></script>
 <script src="{{ asset('js/pwa.js') }}?v={{ filemtime(public_path('js/pwa.js')) }}" defer></script>
 <script src="{{ asset('js/player.js') }}?v={{ filemtime(public_path('js/player.js')) }}" defer></script>
+<script src="{{ asset('js/loader.js') }}?v={{ filemtime(public_path('js/loader.js')) }}" defer></script>
 </head>
 <body data-base="{{ url('/') }}"
       data-catalog-version="{{ \App\Services\CatalogSyncService::version() }}"
@@ -307,6 +308,32 @@
     </div>
   </div>
 </dialog>
+
+{{-- Splash Loader 7.5 detik saat link lokal diklik (tetap menjaga pemutar tetap hidup) --}}
+<div id="musikkuSplashLoader" class="mk-loader hidden" data-turbo-permanent role="status" aria-live="polite">
+  <div class="mk-loader-card">
+    <div class="mk-logo-ring">
+      <img src="{{ asset('images/icons/icon-192x192.png') }}" alt="Logo Musikku">
+    </div>
+    <h2>Musikku</h2>
+    <p class="mk-slogan">“Musik Jernih, Suara Halus, Menemani Setiap Langkah”</p>
+    <div class="mk-vm-grid">
+      <div class="mk-vm-box">
+        <small>Visi Musikku</small>
+        <p>Menghadirkan pengalaman mendengarkan musik yang jernih, lembut di telinga, dan nyaman diakses siapa saja.</p>
+      </div>
+      <div class="mk-vm-box">
+        <small>Misi Musikku</small>
+        <p>Merapikan suara agar halus tanpa bising, mendukung penyanyi &amp; label lokal, serta menemani belajar maupun bekerja.</p>
+      </div>
+    </div>
+    <div class="mk-loader-bar"><div id="mkLoaderBarFill" class="mk-loader-bar-fill"></div></div>
+    <div class="mk-loader-meta">
+      <span>Membuka: <b id="mkLoaderDest">Halaman</b></span>
+      <span><b id="mkLoaderSec">7.5</b> detik</span>
+    </div>
+  </div>
+</div>
 
 <div id="toast"></div>
 </body>

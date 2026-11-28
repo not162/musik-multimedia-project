@@ -189,6 +189,24 @@ dialog{background:#ffffff;color:var(--fg);border:1px solid var(--line);border-ra
 .eq-band input[type=range]{writing-mode:vertical-lr;direction:rtl;width:24px;height:110px;padding:0;margin:2px 0;background:#cbd5e1}
 .eq-foot{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px}
 
+/* ---- Brand Splash Loader (7.5s saat klik link lokal) ---- */
+.mk-loader{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;padding:24px;background:linear-gradient(135deg,rgba(240,253,244,.98) 0%,rgba(239,246,255,.98) 55%,rgba(255,255,255,.98) 100%);backdrop-filter:blur(12px);opacity:0;transition:opacity .28s ease}
+.mk-loader.is-visible{opacity:1}
+.mk-loader-card{width:min(560px,94vw);background:#ffffff;border:1px solid #cbd5e1;border-radius:24px;padding:32px 28px;text-align:center;box-shadow:0 24px 60px rgba(15,23,42,.14)}
+.mk-logo-ring{width:92px;height:92px;margin:0 auto 14px;border-radius:24px;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#dcfce7,#dbeafe);border:2px solid #86efac;animation:mkPulse 1.8s ease-in-out infinite}
+.mk-logo-ring img{width:64px;height:64px;border-radius:14px}
+@keyframes mkPulse{0%,100%{transform:scale(1);box-shadow:0 0 0 0 rgba(22,163,74,.28)}50%{transform:scale(1.04);box-shadow:0 0 0 14px rgba(22,163,74,0)}}
+.mk-loader-card h2{justify-content:center;margin:0 0 6px;font-size:26px;color:#14532d}
+.mk-slogan{margin:0 0 18px;font-size:15.5px;font-weight:700;color:#0f172a}
+.mk-vm-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;text-align:left;margin-bottom:18px}
+.mk-vm-box{background:#f8fafc;border:1px solid var(--line);border-radius:14px;padding:12px 14px}
+.mk-vm-box small{display:block;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--acc2);margin-bottom:4px;font-size:11px}
+.mk-vm-box p{margin:0;font-size:13px;color:var(--mut);line-height:1.5}
+.mk-loader-bar{width:100%;height:8px;background:#e2e8f0;border-radius:99px;overflow:hidden;margin-bottom:8px}
+.mk-loader-bar-fill{width:0%;height:100%;background:linear-gradient(90deg,#16a34a,#0284c7);border-radius:99px;transition:width .08s linear}
+.mk-loader-meta{display:flex;justify-content:space-between;font-size:12.5px;color:var(--mut);font-variant-numeric:tabular-nums}
+@media(max-width:600px){.mk-vm-grid{grid-template-columns:1fr}}
+
 @media(max-width:960px){
   .hero-grid,.tier-grid,.two,.feature-grid,.steps-grid,.eq-controls-grid,.eq-macro-grid{grid-template-columns:1fr}
 }
