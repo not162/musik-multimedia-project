@@ -2,8 +2,12 @@
 
 namespace App\Services;
 
-use App\Models\{AiTrainingRun, AudioTrainingSample, Song};
-use Illuminate\Support\Facades\{File, Log};
+use App\Events\{SongFinetunedEvent, UserNotificationEvent};
+use App\Models\{AiTrainingRun, Artist, AudioTrainingSample, Song, User};
+use App\Services\{AiMusicService, CatalogSyncService, LrsService};
+use App\Support\SafeBroadcast;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\{File, Log, Storage};
 
 /**
  * Pipeline AI & Alat Bantu Latih Suara:
@@ -346,8 +350,116 @@ class AudioTrainingService
         return $run->fresh();
     }
 
+    public static function customImportRules(): array
+    {
+        return [
+            'title'              => 'required|string|max:150',
+            'artist_name'        => 'nullable|string|max:120',
+            'genre_id'           => 'nullable|exists:genres,id',
+            'voice_bitrate_kbps' => 'required|integer|min:128|max:250',
+            'voice_style'        => 'nullable|string|in:halus_jernih,vokal_lembut,hangat_alami,bersih_seimbang,nyaman_fokus',
+            'audio'              => 'required|file|mimes:mp3,mp4,wav,ogg,m4a,aac,flac|max:51200',
+            'lyrics'             => 'nullable|string|max:20000',
+        ];
+    }
+
     /**
-     * Langkah 4: Latih & Haluskan Suara Lagu Agar Lebih Halus dan Jernih (AI + FFmpeg nyata, support MP3/MP4 & 100-1100 kHz).
+     * Impor lagu custom milik pengguna dengan pengkodean pita suara khusus (128-250 kbps) via FFmpeg.
+     */
+    public function importUserCustomSong(User $user, UploadedFile $file, array $input): array
+    {
+        $bitrate    = max(128, min(250, (int) ($input['voice_bitrate_kbps'] ?? 192)));
+        $styleKey   = array_key_exists((string) ($input['voice_style'] ?? ''), self::VOICE_PRESETS)
+            ? (string) $input['voice_style']
+            : 'halus_jernih';
+        $artistName = trim((string) ($input['artist_name'] ?? '')) ?: $user->name;
+        $artist     = Artist::firstOrCreate(['name' => $artistName]);
+
+        $ext        = strtolower($file->getClientOriginalExtension() ?: 'mp3');
+        $rawName    = 'user_raw_' . $user->id . '_' . uniqid() . '.' . $ext;
+        $storedPath = $file->storeAs('songs', $rawName, 'public');
+
+        $song = Song::create([
+            'artist_id'          => $artist->id,
+            'genre_id'           => $input['genre_id'] ?? null,
+            'uploaded_by'        => $user->id,
+            'title'              => trim((string) $input['title']),
+            'file_path'          => $storedPath,
+            'media_format'       => $ext,
+            'voice_bitrate_kbps' => $bitrate,
+            'lyrics'             => $input['lyrics'] ?? null,
+            'duration'           => 0,
+        ]);
+
+        $meta = $this->ai->probeAudio($song);
+        if (! empty($meta['duration_s'])) {
+            $song->update(['duration' => (int) $meta['duration_s']]);
+        }
+
+        $res = $this->polishSongVoice(
+            $song->fresh(),
+            $styleKey,
+            'medium',
+            "Optimalkan pita suara {$bitrate} kbps untuk unggahan Studio Musik pengguna.",
+            true,
+            $user->id,
+            null,
+            $bitrate,
+            false
+        );
+
+        $finalSong = $res['song'];
+        $finalSong->update(['voice_bitrate_kbps' => $bitrate]);
+        $finalSong = $finalSong->fresh(['artist', 'genre', 'album', 'recordLabel']);
+
+        LrsService::record('imported_custom_song', 'Song', $finalSong->id, $finalSong->title, [
+            'bitrate_kbps' => $bitrate,
+            'voice_style'  => $styleKey,
+        ]);
+
+        CatalogSyncService::bump('created', 'song', $finalSong->id, $finalSong->title, [
+            'bitrate_kbps' => $bitrate,
+            'custom_user'  => true,
+        ]);
+        SafeBroadcast::dispatch(new SongFinetunedEvent($finalSong, 'user_studio'));
+        SafeBroadcast::dispatch(new UserNotificationEvent(
+            $user->id,
+            'Lagu Custom Berhasil Diimpor',
+            "\"{$finalSong->title}\" siap diputar dengan pita suara {$bitrate} kbps.",
+            'ok'
+        ));
+
+        return [
+            'song'           => $finalSong,
+            'bitrate_kbps'   => $bitrate,
+            'rendered_audio' => $res['rendered_audio'],
+            'message'        => $res['rendered_audio']
+                ? "Lagu custom \"{$finalSong->title}\" berhasil diimpor dengan pita suara {$bitrate} kbps."
+                : "Lagu custom \"{$finalSong->title}\" berhasil diimpor (setelan pita suara {$bitrate} kbps disimpan).",
+        ];
+    }
+
+    /**
+     * Hapus lagu custom milik pengguna secara bersih beserta file fisiknya.
+     */
+    public function deleteUserCustomSong(Song $song): void
+    {
+        $id    = $song->id;
+        $title = $song->title;
+
+        Storage::disk('public')->delete(array_filter([$song->file_path, $song->cover, $song->hires_file_path]));
+        $origDir = storage_path('app/public/songs/originals');
+        foreach (glob($origDir . DIRECTORY_SEPARATOR . "orig_song_{$id}_*") ?: [] as $orig) {
+            @unlink($orig);
+        }
+
+        $song->delete();
+        LrsService::record('deleted_custom_song', 'Song', $id, $title);
+        CatalogSyncService::bump('deleted', 'song', $id, $title);
+    }
+
+    /**
+     * Langkah 4: Latih & Haluskan Suara Lagu Agar Lebih Halus dan Jernih (AI + FFmpeg nyata, support MP3/MP4, 100-1100 kHz, dan pita suara 128-250 kbps).
      */
     public function polishSongVoice(
         Song $song,
@@ -357,11 +469,14 @@ class AudioTrainingService
         bool $renderAudio = true,
         ?int $userId = null,
         ?int $targetKhz = null,
+        ?int $bitrateKbps = null,
+        bool $useExternalAi = true,
     ): array {
         $song->loadMissing(['artist', 'genre', 'recordLabel']);
-        $before = $this->extractAcousticFeatures($song);
-        $preset = self::VOICE_PRESETS[$presetKey] ?? self::VOICE_PRESETS['halus_jernih'];
-        $khz    = ($targetKhz !== null && $targetKhz >= 100 && $targetKhz <= 1100) ? $targetKhz : null;
+        $before  = $this->extractAcousticFeatures($song);
+        $preset  = self::VOICE_PRESETS[$presetKey] ?? self::VOICE_PRESETS['halus_jernih'];
+        $khz     = ($targetKhz !== null && $targetKhz >= 100 && $targetKhz <= 1100) ? $targetKhz : null;
+        $bitrate = ($bitrateKbps !== null && $bitrateKbps >= 128 && $bitrateKbps <= 250) ? $bitrateKbps : null;
 
         $run = AiTrainingRun::latest()->first();
         $modelBands = null;
@@ -395,7 +510,7 @@ class AudioTrainingService
         $usedSource = $run ? 'trained_model' : 'smart_local';
         $plainNotes = $preset['summary'];
 
-        if ($aiAdvice = $this->askAiForVoicePolish($song, $before, $preset['label'], $customPrompt)) {
+        if ($useExternalAi && ($aiAdvice = $this->askAiForVoicePolish($song, $before, $preset['label'], $customPrompt))) {
             $usedSource = 'ai_and_trained_model';
             if (! empty($aiAdvice['eq_bands']) && count($aiAdvice['eq_bands']) === 10) {
                 $bands = array_map(
@@ -416,7 +531,7 @@ class AudioTrainingService
         $renderMsg = 'Profil penyesuaian suara diperbarui.';
         $hiresRel = $song->hires_file_path;
         if ($renderAudio) {
-            $ff = $this->renderSmoothClearAudio($song, $bands, $preampDb, $noiseDb, $khz);
+            $ff = $this->renderSmoothClearAudio($song, $bands, $preampDb, $noiseDb, $khz, $bitrate);
             $rendered  = $ff['ok'];
             $renderMsg = $ff['message'];
             if (! empty($ff['hires_file_path'])) {
@@ -433,6 +548,9 @@ class AudioTrainingService
         if ($khz) {
             $plainNotes = rtrim($plainNotes, '.') . ". Arsip master resolusi {$khz} kHz telah dibuat, sementara pemutar web memutar versi halus 48 kHz agar lancar di semua perangkat.";
         }
+        if ($bitrate) {
+            $plainNotes = rtrim($plainNotes, '.') . ". Pita suara dikodekan pada {$bitrate} kbps agar vokal halus & jernih.";
+        }
 
         $freshSong = $song->fresh();
         $after = $this->extractAcousticFeatures($freshSong);
@@ -442,6 +560,7 @@ class AudioTrainingService
 
         $freshSong->update([
             'media_format'           => $ext,
+            'voice_bitrate_kbps'     => $bitrate ?? $freshSong->voice_bitrate_kbps,
             'is_ai_finetuned'        => true,
             'is_voice_smoothed'      => true,
             'voice_preset'           => $presetKey,
@@ -462,6 +581,7 @@ class AudioTrainingService
                 'voice_smoothed'         => true,
                 'noise_reduction_db'     => $noiseDb,
                 'target_sample_rate_khz' => $khz ?? $freshSong->target_sample_rate_khz,
+                'voice_bitrate_kbps'     => $bitrate ?? $freshSong->voice_bitrate_kbps,
             ]),
             'labeled_by' => $freshSong->labeled_by ?: $userId,
             'labeled_at' => $freshSong->labeled_at ?: now(),
@@ -477,13 +597,14 @@ class AudioTrainingService
             'before_smoothness' => $before['smoothness_score'],
             'after_smoothness'  => min(99, $smoothnessAfter),
             'hires_khz'         => $khz,
+            'bitrate_kbps'      => $bitrate ?? $freshSong->voice_bitrate_kbps,
         ];
     }
 
     /**
      * Render file fisik (.mp3 / .mp4 / lainnya) menjadi lebih halus, minim noise/desis, lembut vokalnya, dan jernih.
      */
-    public function renderSmoothClearAudio(Song $song, array $bands, float $preampDb, float $noiseReductionDb, ?int $targetKhz = null): array
+    public function renderSmoothClearAudio(Song $song, array $bands, float $preampDb, float $noiseReductionDb, ?int $targetKhz = null, ?int $bitrateKbps = null): array
     {
         $ffmpeg = $this->ai->findFfmpeg();
         if (! $ffmpeg) {
@@ -503,10 +624,12 @@ class AudioTrainingService
             @copy($src, $origCopy);
         }
 
-        $meta = $this->ai->probeAudio($song);
-        $ext = strtolower(pathinfo($src, PATHINFO_EXTENSION)) ?: 'mp3';
-        $tmpName = 'halus_' . $song->id . '_' . time() . '.' . $ext;
-        $tmp = storage_path('app/public/songs/' . $tmpName);
+        $meta    = $this->ai->probeAudio($song);
+        $ext     = strtolower(pathinfo($src, PATHINFO_EXTENSION)) ?: 'mp3';
+        $bitrate = ($bitrateKbps !== null && $bitrateKbps >= 128 && $bitrateKbps <= 250) ? $bitrateKbps : 192;
+        $outExt  = $ext === 'mp4' ? 'mp4' : ($bitrateKbps !== null || $ext === 'mp3' ? 'mp3' : $ext);
+        $tmpName = 'halus_' . $song->id . '_' . time() . '.' . $outExt;
+        $tmp     = storage_path('app/public/songs/' . $tmpName);
 
         // Rantai penghalus & penjernih suara: buang dengung + redam noise + haluskan huruf 's' + EQ halus + perata suara
         $filters = [
@@ -526,11 +649,11 @@ class AudioTrainingService
         $filters[] = 'acompressor=threshold=-16dB:ratio=2.2:attack=12:release=140:makeup=1.2';
         $filters[] = 'loudnorm=I=-14:TP=-1.5:LRA=11';
 
-        $codecArgs = match ($ext) {
+        $codecArgs = match ($outExt) {
             'mp4' => ($meta['has_video'] ?? false)
-                ? '-c:v copy -c:a aac -b:a 192k -ar 48000 -movflags +faststart'
-                : '-vn -c:a aac -b:a 192k -ar 48000 -movflags +faststart',
-            'mp3' => '-vn -c:a libmp3lame -b:a 192k -ar 48000',
+                ? "-c:v copy -c:a aac -b:a {$bitrate}k -ar 48000 -movflags +faststart"
+                : "-vn -c:a aac -b:a {$bitrate}k -ar 48000 -movflags +faststart",
+            'mp3' => "-vn -c:a libmp3lame -b:a {$bitrate}k -ar 48000",
             default => '',
         };
 
@@ -559,16 +682,20 @@ class AudioTrainingService
         }
 
         // Hapus render lama sementara saja; file bawaan asli tetap aman di originals/
-        if (str_starts_with(basename($src), 'halus_') || str_starts_with(basename($src), 'master_')) {
+        if (str_starts_with(basename($src), 'halus_') || str_starts_with(basename($src), 'master_') || str_starts_with(basename($src), 'user_raw_')) {
             @unlink($src);
         }
 
-        $song->update(['file_path' => 'songs/' . $tmpName, 'media_format' => $ext]);
+        $song->update([
+            'file_path'          => 'songs/' . $tmpName,
+            'media_format'       => $outExt,
+            'voice_bitrate_kbps' => $bitrateKbps ?? $song->voice_bitrate_kbps,
+        ]);
 
         return [
             'ok'              => true,
             'hires_file_path' => $hiresRel,
-            'message'         => 'File audio berhasil dilatih ulang menjadi lebih halus, bersih dari bising, dan jernih.',
+            'message'         => 'File audio berhasil diolah pada ' . $bitrate . ' kbps menjadi lebih halus dan jernih.',
         ];
     }
 

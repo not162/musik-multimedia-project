@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Events\StudioRequestUpdatedEvent;
-use App\Models\{ApiEndpointRule, Song, StudioRequest};
+use App\Models\{ApiEndpointRule, Genre, Song, StudioRequest};
 use App\Services\{AudioTrainingService, CatalogSyncService, LrsService};
 use App\Support\SafeBroadcast;
 use Illuminate\Http\Request;
@@ -30,9 +30,10 @@ class StudioController extends Controller
         $studioEnabled  = $studioRule ? (bool) $studioRule->is_enabled : true;
         $styles         = AudioTrainingService::VOICE_PRESETS;
         $preferences    = $user->preferences ?? [];
+        $genres         = Genre::orderBy('name')->get();
 
         return view('studio.index', compact(
-            'user', 'songs', 'myRequests', 'studioEnabled', 'styles', 'preferences'
+            'user', 'songs', 'myRequests', 'studioEnabled', 'styles', 'preferences', 'genres'
         ));
     }
 
@@ -90,5 +91,28 @@ class StudioController extends Controller
         CatalogSyncService::bump('studio_request', 'studio', $song->id, $song->title);
 
         return back()->with('ok', "Permintaan penyesuaian suara untuk \"{$song->title}\" sudah terkirim langsung ke tim pengelola Studio.");
+    }
+
+    public function importSong(Request $request, AudioTrainingService $trainer)
+    {
+        $data = $request->validate(AudioTrainingService::customImportRules());
+        $res  = $trainer->importUserCustomSong($request->user(), $request->file('audio'), $data);
+
+        return back()->with('ok', $res['message']);
+    }
+
+    public function destroySong(Request $request, Song $song, AudioTrainingService $trainer)
+    {
+        $user = $request->user();
+        abort_unless(
+            $user->isAdmin() || ($song->uploaded_by !== null && (int) $song->uploaded_by === (int) $user->id),
+            403,
+            'Anda hanya dapat menghapus lagu custom yang Anda impor sendiri.'
+        );
+
+        $title = $song->title;
+        $trainer->deleteUserCustomSong($song);
+
+        return back()->with('ok', "Lagu custom \"{$title}\" berhasil dihapus dari Studio Musik.");
     }
 }

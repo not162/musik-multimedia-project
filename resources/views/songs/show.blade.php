@@ -12,7 +12,7 @@
       @if($song->genre) · <a href="{{ route('genres.show', $song->genre) }}">{{ $song->genre->name }}</a>@endif
       @if($song->recordLabel) · <a href="{{ route('labels.show', $song->recordLabel) }}">🏷️ {{ $song->recordLabel->name }}</a>@endif
       · {{ $song->duration_label }} · {{ number_format($song->play_count) }}× diputar</div>
-    @if($song->is_voice_smoothed || $song->is_ai_finetuned || $song->target_sample_rate_khz)
+    @if($song->is_voice_smoothed || $song->is_ai_finetuned || $song->target_sample_rate_khz || $song->voice_bitrate_kbps)
       <div style="margin-top:8px">
         @if($song->is_voice_smoothed)
           <span class="badge ok">✨ Suara Halus &amp; Jernih · Kejernihan {{ $song->voice_clarity_score }}/100</span>
@@ -21,6 +21,9 @@
         @endif
         @if($song->target_sample_rate_khz)
           <span class="badge info">🔊 Master {{ $song->target_sample_rate_khz }} kHz</span>
+        @endif
+        @if($song->voice_bitrate_kbps)
+          <span class="badge info">🎙️ Pita Suara {{ $song->voice_bitrate_kbps }} kbps</span>
         @endif
         @if($song->ai_mastering_notes)<small class="mut" style="display:block;margin-top:4px">{{ $song->ai_mastering_notes }}</small>@endif
       </div>

@@ -27,6 +27,9 @@
       @if($song->target_sample_rate_khz)
         <span class="badge" style="margin-left:4px">🔊 {{ $song->target_sample_rate_khz }} kHz</span>
       @endif
+      @if($song->voice_bitrate_kbps)
+        <span class="badge info" style="margin-left:4px">🎙️ {{ $song->voice_bitrate_kbps }} kbps</span>
+      @endif
       <span class="js-ai-badge" style="margin-left:4px">
         @if($song->is_voice_smoothed)
           <span class="badge ok">✨ Suara Halus &amp; Jernih</span>
@@ -47,5 +50,8 @@
     @isset($removeUrl)
       <form method="POST" action="{{ $removeUrl }}">@csrf @method('DELETE')<button class="icon" title="Hapus dari daftar putar">✕</button></form>
     @endisset
+    @if(!empty($deleteCustomUrl))
+      <form method="POST" action="{{ $deleteCustomUrl }}" onsubmit="return confirm('Hapus lagu custom ini dari Studio Musik?')">@csrf @method('DELETE')<button class="icon" title="Hapus lagu custom saya">🗑</button></form>
+    @endif
   </div>
 </div>

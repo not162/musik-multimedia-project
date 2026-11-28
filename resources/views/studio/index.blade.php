@@ -37,6 +37,57 @@
 
 @include('partials.errors')
 
+<div class="panel">
+  <h3>⬆️ Impor Lagu Custom (Pita Suara 128 – 250 kbps)</h3>
+  <p class="mut" style="font-size:13px">
+    Unggah lagu pribadi Anda (.mp3, .mp4, .wav, .m4a, .ogg, .aac, .flac) lalu pilih kerapatan pita suara antara <b>128 kbps hingga 250 kbps</b> agar suara nyanyian terdengar lebih halus, bersih, dan jernih.
+  </p>
+  <form method="POST" action="{{ route('studio.import') }}" enctype="multipart/form-data" class="form">@csrf
+    <div class="row2">
+      <label>Judul Lagu *
+        <input name="title" value="{{ old('title') }}" maxlength="150" placeholder="Mis. Rekaman Akustik Sore" required>
+      </label>
+      <label>Nama Penyanyi / Pembuat
+        <input name="artist_name" value="{{ old('artist_name') }}" maxlength="120" placeholder="Boleh kosong — otomatis memakai {{ $user->name }}">
+      </label>
+    </div>
+    <div class="row2">
+      <label>Pilih File Audio / Video *
+        <input type="file" name="audio" accept=".mp3,.mp4,.wav,.ogg,.m4a,.aac,.flac" required>
+      </label>
+      <label>Kategori Musik (Opsional)
+        <select name="genre_id">
+          <option value="">-- Pilih Kategori --</option>
+          @foreach($genres ?? [] as $g)
+            <option value="{{ $g->id }}" @selected((string) old('genre_id') === (string) $g->id)>{{ $g->name }}</option>
+          @endforeach
+        </select>
+      </label>
+    </div>
+    <div class="row2">
+      <label>
+        <span>Frekuensi Pita Suara (<b>128 – 250 kbps</b>): <b id="bitrateBadge" class="badge ok">{{ old('voice_bitrate_kbps', 192) }} kbps</b></span>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:6px">
+          <input type="range" id="bitrateSlider" min="128" max="250" step="1" value="{{ old('voice_bitrate_kbps', 192) }}" style="flex:1">
+          <input type="number" id="bitrateNumber" name="voice_bitrate_kbps" min="128" max="250" value="{{ old('voice_bitrate_kbps', 192) }}" style="width:92px" required>
+        </div>
+        <small class="mut" id="bitrateHint">128 kbps hemat ruang · 192 kbps halus seimbang · 250 kbps detail pita suara tertinggi.</small>
+      </label>
+      <label>Karakter Kehalusan Suara
+        <select name="voice_style">
+          @foreach($styles as $k => $st)
+            <option value="{{ $k }}" @selected(old('voice_style', 'halus_jernih') === $k)>{{ $st['label'] }}</option>
+          @endforeach
+        </select>
+      </label>
+    </div>
+    <label>Lirik Lagu (Opsional)
+      <textarea name="lyrics" rows="2" maxlength="20000" placeholder="Tuliskan lirik jika ada...">{{ old('lyrics') }}</textarea>
+    </label>
+    <button class="btn">⬆️ Impor &amp; Haluskan Pita Suara</button>
+  </form>
+</div>
+
 <div class="two">
   {{-- Panel Kiri: Pengaturan Suara Pribadi --}}
   <div class="panel">
@@ -154,8 +205,30 @@
   <h3>🎧 Daftar Lagu Tersedia di Studio Musik</h3>
   <div class="song-list" id="studioSongs">
     @foreach($songs as $s)
-      @include('partials.song-row', ['song' => $s])
+      @include('partials.song-row', [
+        'song' => $s,
+        'deleteCustomUrl' => ($s->uploaded_by && (int) $s->uploaded_by === (int) $user->id) ? route('studio.songs.destroy', $s) : null,
+      ])
     @endforeach
   </div>
 </div>
+
+@push('scripts')
+<script>
+(() => {
+  const slider = document.getElementById('bitrateSlider');
+  const num = document.getElementById('bitrateNumber');
+  const badge = document.getElementById('bitrateBadge');
+  if (!slider || !num || !badge) return;
+  const sync = (val) => {
+    const n = Math.max(128, Math.min(250, parseInt(val || 192, 10) || 192));
+    slider.value = n;
+    num.value = n;
+    badge.textContent = n + ' kbps';
+  };
+  slider.addEventListener('input', () => sync(slider.value));
+  num.addEventListener('change', () => sync(num.value));
+})();
+</script>
+@endpush
 @endsection

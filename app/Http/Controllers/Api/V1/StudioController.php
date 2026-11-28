@@ -22,20 +22,23 @@ class StudioController extends Controller
         $songs = Song::with(['artist:id,name', 'genre:id,name', 'recordLabel:id,name,slug'])
             ->latest()->get()
             ->map(fn (Song $s) => [
-                'id'               => $s->id,
-                'title'            => $s->title,
-                'artist'           => $s->artist?->name,
-                'genre'            => $s->genre?->name,
-                'label'            => $s->recordLabel?->name,
-                'media_format'     => $s->media_format ?: 'mp3',
-                'duration_label'   => $s->duration_label,
-                'is_smoothed'      => (bool) $s->is_voice_smoothed,
-                'sound_style'      => $s->ai_mood ?: 'Standar',
-                'clarity_score'    => $s->voice_clarity_score,
-                'smoothness_score' => $s->voice_smoothness_score,
-                'sound_notes'      => $s->ai_mastering_notes,
-                'eq_bands'         => $s->ai_eq_bands ?? [0,0,0,0,0,0,0,0,0,0],
-                'stream_url'       => route('songs.stream', $s),
+                'id'                 => $s->id,
+                'title'              => $s->title,
+                'artist'             => $s->artist?->name,
+                'genre'              => $s->genre?->name,
+                'label'              => $s->recordLabel?->name,
+                'media_format'       => $s->media_format ?: 'mp3',
+                'voice_bitrate_kbps' => $s->voice_bitrate_kbps,
+                'is_custom'          => $s->uploaded_by !== null,
+                'uploaded_by'        => $s->uploaded_by,
+                'duration_label'     => $s->duration_label,
+                'is_smoothed'        => (bool) $s->is_voice_smoothed,
+                'sound_style'        => $s->ai_mood ?: 'Standar',
+                'clarity_score'      => $s->voice_clarity_score,
+                'smoothness_score'   => $s->voice_smoothness_score,
+                'sound_notes'        => $s->ai_mastering_notes,
+                'eq_bands'           => $s->ai_eq_bands ?? [0,0,0,0,0,0,0,0,0,0],
+                'stream_url'         => route('songs.stream', $s),
             ]);
 
         $myRequests = StudioRequest::with('song:id,title')
@@ -112,5 +115,52 @@ class StudioController extends Controller
             'message' => 'Permintaan Studio Musik terkirim secara real-time.',
             'request' => $req->load('song:id,title'),
         ], 201);
+    }
+
+    public function importSong(Request $request, AudioTrainingService $trainer): JsonResponse
+    {
+        $data = $request->validate(AudioTrainingService::customImportRules());
+        $res  = $trainer->importUserCustomSong($request->user(), $request->file('audio'), $data);
+        $s    = $res['song'];
+
+        return response()->json([
+            'message'        => $res['message'],
+            'bitrate_kbps'   => $res['bitrate_kbps'],
+            'rendered_audio' => $res['rendered_audio'],
+            'catalog_version'=> CatalogSyncService::version(),
+            'song'           => [
+                'id'                 => $s->id,
+                'title'              => $s->title,
+                'artist'             => $s->artist?->name,
+                'genre'              => $s->genre?->name,
+                'media_format'       => $s->media_format ?: 'mp3',
+                'voice_bitrate_kbps' => $s->voice_bitrate_kbps,
+                'is_custom'          => true,
+                'uploaded_by'        => $s->uploaded_by,
+                'duration_label'     => $s->duration_label,
+                'is_smoothed'        => (bool) $s->is_voice_smoothed,
+                'clarity_score'      => $s->voice_clarity_score,
+                'smoothness_score'   => $s->voice_smoothness_score,
+                'stream_url'         => route('songs.stream', $s),
+            ],
+        ], 201);
+    }
+
+    public function destroySong(Request $request, Song $song, AudioTrainingService $trainer): JsonResponse
+    {
+        $user = $request->user();
+        abort_unless(
+            $user->isAdmin() || ($song->uploaded_by !== null && (int) $song->uploaded_by === (int) $user->id),
+            403,
+            'Anda hanya dapat menghapus lagu custom milik Anda sendiri.'
+        );
+
+        $title = $song->title;
+        $trainer->deleteUserCustomSong($song);
+
+        return response()->json([
+            'message'         => "Lagu custom \"{$title}\" berhasil dihapus.",
+            'catalog_version' => CatalogSyncService::version(),
+        ]);
     }
 }

@@ -350,4 +350,106 @@ class MusikkuEnterpriseTest extends TestCase
         $user->tokens()->where('name', 'test-user-studio')->delete();
         $admin->tokens()->where('name', 'test-admin-studio')->delete();
     }
+
+    public function test_user_can_import_custom_song_with_vocal_bitrate_128_to_250_kbps(): void
+    {
+        $user  = User::where('email', 'user@musikku.test')->firstOrFail();
+        $token = $user->createToken('test-user-import', ['user'])->plainTextToken;
+
+        $this->actingAs($user)->get('/studio-musik')
+            ->assertStatus(200)
+            ->assertSee('Impor Lagu Custom')
+            ->assertSee('128')
+            ->assertSee('250 kbps')
+            ->assertDontSee('NVIDIA AI');
+        $this->app['auth']->forgetGuards();
+
+        $tmpMp3 = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'phpunit_custom_user_song.mp3';
+        $ffmpeg = 'C:\\ProgramData\\chocolatey\\bin\\ffmpeg.exe';
+        if (file_exists($ffmpeg)) {
+            @exec(sprintf('"%s" -y -f lavfi -i "sine=frequency=440:duration=1" -c:a libmp3lame -b:a 192k %s 2>&1', $ffmpeg, escapeshellarg($tmpMp3)));
+        }
+
+        $this->assertTrue(file_exists($tmpMp3), 'FFmpeg synthetic MP3 test file was created.');
+
+        // 1. Validation rejects bitrate below 128 kbps or above 250 kbps
+        $badLow = new UploadedFile($tmpMp3, 'bad-low.mp3', 'audio/mpeg', null, true);
+        $this->withToken($token)->post('/api/v1/studio/import', [
+            'title'              => 'Bitrate Terlalu Rendah',
+            'voice_bitrate_kbps' => 96,
+            'audio'              => $badLow,
+        ], ['Accept' => 'application/json'])->assertStatus(422)->assertJsonValidationErrors(['voice_bitrate_kbps']);
+
+        $badHigh = new UploadedFile($tmpMp3, 'bad-high.mp3', 'audio/mpeg', null, true);
+        $this->withToken($token)->post('/api/v1/studio/import', [
+            'title'              => 'Bitrate Terlalu Tinggi',
+            'voice_bitrate_kbps' => 320,
+            'audio'              => $badHigh,
+        ], ['Accept' => 'application/json'])->assertStatus(422)->assertJsonValidationErrors(['voice_bitrate_kbps']);
+
+        // 2. Valid API custom song import at 192 kbps
+        $validMp3 = new UploadedFile($tmpMp3, 'custom-user-192.mp3', 'audio/mpeg', null, true);
+        $res = $this->withToken($token)->post('/api/v1/studio/import', [
+            'title'              => 'Lagu Custom User 192kbps',
+            'artist_name'        => 'Vokal Uji Studio',
+            'voice_bitrate_kbps' => 192,
+            'voice_style'        => 'vokal_lembut',
+            'audio'              => $validMp3,
+        ], ['Accept' => 'application/json']);
+
+        $res->assertStatus(201)
+            ->assertJsonPath('bitrate_kbps', 192)
+            ->assertJsonPath('song.voice_bitrate_kbps', 192)
+            ->assertJsonPath('song.is_custom', true)
+            ->assertJsonPath('song.is_smoothed', true)
+            ->assertJsonPath('song.uploaded_by', $user->id);
+
+        $songId = (int) $res->json('song.id');
+        $song   = Song::findOrFail($songId);
+        $this->assertSame($user->id, (int) $song->uploaded_by);
+        $this->assertSame(192, (int) $song->voice_bitrate_kbps);
+        $this->assertTrue(Storage::disk('public')->exists($song->file_path));
+
+        $this->get("/lagu/{$songId}/stream")->assertStatus(200);
+        $this->app['auth']->forgetGuards();
+        $this->actingAs($user)->get('/studio-musik')
+            ->assertStatus(200)
+            ->assertSee('Lagu Custom User 192kbps')
+            ->assertSee('192 kbps');
+        $this->app['auth']->forgetGuards();
+
+        // 3. Another user cannot delete someone else's custom song
+        $other = User::create([
+            'name'     => 'Pengguna Lain Uji',
+            'email'    => 'other-import-test-' . time() . '@musikku.test',
+            'password' => Hash::make('secret123'),
+            'role'     => 'user',
+        ]);
+        $otherToken = $other->createToken('test-other', ['user'])->plainTextToken;
+        $this->withToken($otherToken)->deleteJson("/api/v1/studio/songs/{$songId}")->assertStatus(403);
+        $other->tokens()->delete();
+        $other->delete();
+
+        // 4. Web upload at upper boundary 250 kbps
+        $this->app['auth']->forgetGuards();
+        $webMp3 = new UploadedFile($tmpMp3, 'custom-user-250.mp3', 'audio/mpeg', null, true);
+        $this->actingAs($user)->post('/studio-musik/import', [
+            'title'              => 'Lagu Custom Web 250kbps',
+            'voice_bitrate_kbps' => 250,
+            'voice_style'        => 'halus_jernih',
+            'audio'              => $webMp3,
+        ])->assertRedirect()->assertSessionHas('ok');
+
+        $webSong = Song::where('title', 'Lagu Custom Web 250kbps')->where('uploaded_by', $user->id)->firstOrFail();
+        $this->assertSame(250, (int) $webSong->voice_bitrate_kbps);
+
+        // 5. Clean up test songs, tokens, temporary artist & file
+        $this->withToken($token)->deleteJson("/api/v1/studio/songs/{$songId}")->assertStatus(200);
+        $this->app['auth']->forgetGuards();
+        $this->actingAs($user)->delete("/studio-musik/songs/{$webSong->id}")->assertRedirect()->assertSessionHas('ok');
+
+        Artist::where('name', 'Vokal Uji Studio')->doesntHave('songs')->delete();
+        $user->tokens()->where('name', 'test-user-import')->delete();
+        @unlink($tmpMp3);
+    }
 }

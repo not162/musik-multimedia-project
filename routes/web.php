@@ -67,6 +67,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/studio-musik', [StudioController::class, 'index'])->name('studio.index');
     Route::post('/studio-musik/preferensi', [StudioController::class, 'savePreferences'])->name('studio.preferences');
     Route::post('/studio-musik/requests', [StudioController::class, 'storeRequest'])->name('studio.requests.store');
+    Route::post('/studio-musik/import', [StudioController::class, 'importSong'])->name('studio.import');
+    Route::delete('/studio-musik/songs/{song}', [StudioController::class, 'destroySong'])->name('studio.songs.destroy');
 
     Route::get('/favorit', [FavoriteController::class, 'index'])->name('favorites.index');
     Route::post('/favorit/{song}', [FavoriteController::class, 'toggle'])->name('favorites.toggle');

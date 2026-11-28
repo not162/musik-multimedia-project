@@ -10,8 +10,8 @@ class Song extends Model
     use HasArt;
 
     protected $fillable = [
-        'artist_id', 'album_id', 'genre_id', 'record_label_id',
-        'title', 'file_path', 'media_format', 'cover', 'lyrics', 'duration', 'play_count',
+        'artist_id', 'album_id', 'genre_id', 'record_label_id', 'uploaded_by',
+        'title', 'file_path', 'media_format', 'voice_bitrate_kbps', 'cover', 'lyrics', 'duration', 'play_count',
         'is_ai_finetuned', 'ai_mood', 'ai_tempo_bpm', 'ai_direction',
         'ai_eq_bands', 'ai_preamp_db', 'ai_pitch_rate', 'ai_mastering_notes',
         'ai_finetuned_at', 'audio_meta',
@@ -21,6 +21,8 @@ class Song extends Model
     ];
 
     protected $casts = [
+        'uploaded_by'            => 'integer',
+        'voice_bitrate_kbps'     => 'integer',
         'is_ai_finetuned'        => 'boolean',
         'is_voice_smoothed'      => 'boolean',
         'ai_eq_bands'            => 'array',
@@ -37,6 +39,7 @@ class Song extends Model
     public function album()           { return $this->belongsTo(Album::class); }
     public function genre()           { return $this->belongsTo(Genre::class); }
     public function recordLabel()     { return $this->belongsTo(RecordLabel::class); }
+    public function uploader()        { return $this->belongsTo(User::class, 'uploaded_by'); }
     public function histories()       { return $this->hasMany(PlayHistory::class); }
     public function favoritedBy()     { return $this->belongsToMany(User::class, 'favorites')->withTimestamps(); }
     public function trainingSamples() { return $this->hasMany(AudioTrainingSample::class); }

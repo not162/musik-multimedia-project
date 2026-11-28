@@ -99,6 +99,8 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
             Route::get('/', [V1\StudioController::class, 'index'])->name('index');
             Route::put('preferences', [V1\StudioController::class, 'updatePreferences'])->name('preferences');
             Route::post('requests', [V1\StudioController::class, 'storeRequest'])->name('requests.store');
+            Route::post('import', [V1\StudioController::class, 'importSong'])->name('import');
+            Route::delete('songs/{song}', [V1\StudioController::class, 'destroySong'])->name('songs.destroy');
         });
     });
 
